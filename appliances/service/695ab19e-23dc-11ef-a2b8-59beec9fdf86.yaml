@@ -5,7 +5,7 @@ publisher: OpenNebula Systems
 description: |-
   Appliance with preinstalled [Lithops](https://lithops-cloud.github.io/docs/) and Docker for k8s backend.
 
-  See the dedicated [documentation](https://github.com/OpenNebula/one-apps/wiki/lithops_quick).
+  See the dedicated [documentation](https://github.com/OpenNebula/marketplace-community/wiki/lithops_quick).
 short_description: Appliance with preinstalled Lithops for KVM hosts
 tags:
 - lithops
