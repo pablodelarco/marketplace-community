@@ -1,4 +1,4 @@
-community-apps/build
-community-apps/export
-community-apps/version
-community-apps/Makefile.local
+apps-code/community-apps/build
+apps-code/community-apps/export
+apps-code/community-apps/version
+apps-code/community-apps/Makefile.local
