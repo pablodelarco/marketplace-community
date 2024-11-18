@@ -49,15 +49,8 @@ jobs:
           sshuttle --dns --no-latency-control -r one@${{ secrets.VPN_SERVER }} 10.0.0.0/16 --daemon
 
       - name: Trigger Jenkins
-        env:
-          JENKINS_URL: ${{ secrets.JENKINS_URL }}
-          JENKINS_USER: ${{ secrets.JENKINS_USER }}
-          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
         run: |
-          curl "$JENKINS_URL/job/one-community-distro/buildWithParameters" \
-          --user "$JENKINS_USER:$JENKINS_API_TOKEN" \
-          --data "PARAM1=${{ github.event.inputs.param1 }}" \
-          --data "PARAM2=${{ github.event.inputs.param2 }}"
+          curl "$JENKINS_URL/job/one-community-distro/build?token=${{ secrets.ONE_DISTRO_TOKEN }}"
 
       - name: Remove current labels
         uses: issue-ops/labeler@v2.0.0
