@@ -1,0 +1,50 @@
+name: Process Issue State
+
+on:
+  issues:
+    types:
+      - labeled
+
+jobs:
+  do-changes:
+    if: startsWith(github.event.label.name, 'do_changes')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove current labels
+        uses: issue-ops/labeler@v2.0.0
+        with:
+          action: remove
+          issue_number: ${{ github.event.issue.number }}
+          labels: | 
+            do_changes
+            FAILED_TESTING
+
+      - name: Add new label
+        uses: issue-ops/labeler@v2.0.0
+        with:
+          action: add
+          issue_number: ${{ github.event.issue.number }}
+          labels: "CHANGES_REQUESTED"
+
+  do-tests:
+    if: startsWith(github.event.label.name, 'do_tests')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run tests
+        run: echo "Invoke pipeline here"
+
+      - name: Remove current labels
+        uses: issue-ops/labeler@v2.0.0
+        with:
+          action: remove
+          issue_number: ${{ github.event.issue.number }}
+          labels: | 
+            do_tests
+            CHANGES_REQUESTED
+
+      - name: Add new label
+        uses: issue-ops/labeler@v2.0.0
+        with:
+          action: add
+          issue_number: ${{ github.event.issue.number }}
+          labels: "IN_TESTING"
