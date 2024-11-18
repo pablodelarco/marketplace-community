@@ -1,0 +1,17 @@
+name: Assigned Reviewer
+
+on:
+  issues:
+    types:
+      - assigned
+
+jobs:
+  handle-assignee:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assign reviewer status
+        uses: issue-ops/labeler@v2.0.0
+        with:
+          action: add
+          issue_number: ${{ github.event.issue.number }}"
+          labels: IN_REVIEW
