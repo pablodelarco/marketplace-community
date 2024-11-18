@@ -30,8 +30,34 @@ jobs:
     if: startsWith(github.event.label.name, 'do_tests')
     runs-on: ubuntu-latest
     steps:
-      - name: Run tests
-        run: echo "Invoke pipeline here"
+      - name: Install sshuttle
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshuttle
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo -e "Host *\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
+
+      - name: Start sshuttle VPN
+        run: |
+          sshuttle --dns --no-latency-control -r one@${{ secrets.VPN_SERVER }} 10.0.0.0/16 --daemon
+
+      - name: Trigger Jenkins
+        env:
+          JENKINS_URL: ${{ secrets.JENKINS_URL }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+        run: |
+          curl "$JENKINS_URL/job/one-community-distro/buildWithParameters" \
+          --user "$JENKINS_USER:$JENKINS_API_TOKEN" \
+          --data "PARAM1=${{ github.event.inputs.param1 }}" \
+          --data "PARAM2=${{ github.event.inputs.param2 }}"
 
       - name: Remove current labels
         uses: issue-ops/labeler@v2.0.0
