@@ -1,7 +1,7 @@
 name: Process Issue State
 
 on:
-  issues:
+  pull_request:
     types:
       - labeled
 
@@ -50,7 +50,9 @@ jobs:
 
       - name: Trigger Jenkins
         run: |
-          curl "$JENKINS_URL/job/one-community-distro/build?token=${{ secrets.ONE_DISTRO_TOKEN }}"
+          curl "$JENKINS_URL/job/one-community-distro/build?token=${{ secrets.ONE_DISTRO_TOKEN }} \
+            --data DISTROS=${{ github.event.pull_request.title }} \
+            --data PR_NUMBER=${{ github.event.pull_request.number }}"
 
       - name: Remove current labels
         uses: issue-ops/labeler@v2.0.0
