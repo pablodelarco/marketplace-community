@@ -48,7 +48,7 @@ jobs:
           JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
         run: |
           ssh -i ~/.ssh/id_rsa gitact@$VPN_SERVER -p 2222 "curl -X POST $JENKINS_URL/job/one-community-distro/buildWithParameters?token=$ONE_DISTRO_TOKEN \
-            --user $JENKINS_USER:$JENKINS_TOKEN
+            --user $JENKINS_USER:$JENKINS_TOKEN \
             --data DISTROS=${{ github.event.pull_request.title }} \
             --data PR_NUMBER=${{ github.event.pull_request.number }}"
 
