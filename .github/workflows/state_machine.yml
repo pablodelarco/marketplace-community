@@ -30,11 +30,6 @@ jobs:
     if: startsWith(github.event.label.name, 'do_tests')
     runs-on: ubuntu-latest
     steps:
-      - name: Install sshuttle
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y sshuttle
-
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -43,10 +38,6 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           echo -e "Host *\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
-
-      - name: Start sshuttle VPN
-        run: |
-          sshuttle --dns --no-latency-control -r one@${{ secrets.VPN_SERVER }} 10.0.0.0/16 --daemon
 
       - name: Trigger Jenkins
         run: |
