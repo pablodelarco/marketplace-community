@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Add new label
-        run: gh pr edit ${{ github.event.pull_request.number }} --repo ${{ github.repository_owner }}/${{ github.event.repository.name }} --add-labels "CHANGES_REQUESTED"
+        run: gh pr edit ${{ github.event.pull_request.number }} --repo ${{ github.repository_owner }}/${{ github.event.repository.name }} --add-label "CHANGES_REQUESTED"
         
       - name: Remove old labels
-        run: gh pr edit ${{ github.event.pull_request.number }} --repo ${{ github.repository_owner }}/${{ github.event.repository.name }} --remove-labels "do_changes,FAILED_TESTING"
+        run: gh pr edit ${{ github.event.pull_request.number }} --repo ${{ github.repository_owner }}/${{ github.event.repository.name }} --remove-label "do_changes,FAILED_TESTING"
 
   do-tests:
     if: startsWith(github.event.label.name, 'do_tests')
