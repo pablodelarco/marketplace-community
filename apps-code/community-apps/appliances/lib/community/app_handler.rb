@@ -27,6 +27,8 @@ RSpec.shared_context 'vm_handler' do
 
             path = "#{APPS_PATH}/#{APP_IMAGE_NAME}.#{DISK_FORMAT}"
 
+            puts "Creating image #{APP_IMAGE_NAME} from #{path}"
+
             CLIImage.create(APP_IMAGE_NAME, IMAGE_DATASTORE, "--path #{path}")
         end
 
