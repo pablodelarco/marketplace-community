@@ -162,6 +162,7 @@ opennebula_template:
     cooldown: 120
     elasticity_policies: []
     scheduled_policies: []
+  - name: lithops
     parents":
     - vnf
       master
