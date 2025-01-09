@@ -11,7 +11,7 @@ config = YAML.load_file("#{File.dirname(caller_locations.first.absolute_path)}/.
 VM_TEMPLATE = config[:one][:template][:NAME] || 'base'
 IMAGE_DATASTORE = config[:one][:datastore] || 'default'
 
-APPS_PATH = ENV['IMG_LOCATION']
+APPS_PATH = ENV['IMAGES_URL']
 DISK_FORMAT = config[:infra][:disk_format] || 'qcow2'
 
 APP_IMAGE_NAME = config[:app][:name]

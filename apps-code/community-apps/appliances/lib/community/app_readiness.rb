@@ -11,7 +11,6 @@ if ARGV.empty?
 end
 
 app = ARGV[0] # 'example'
-ENV['IMG_LOCATION'] = ARGV[1]
 
 tests_list_path = "../../#{app}/tests.yaml"
 tests_path = "../../#{app}/tests"
