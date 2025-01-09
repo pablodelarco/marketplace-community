@@ -25,7 +25,7 @@ RSpec.shared_context 'vm_handler' do
 
         if !CLIImage.list('-l NAME').include?(APP_IMAGE_NAME)
 
-            path = "#{APPS_PATH}/#{APP_IMAGE_NAME}.#{DISK_FORMAT}"
+            path = "#{APPS_PATH}#{APP_IMAGE_NAME}.#{DISK_FORMAT}"
 
             puts "Creating image #{APP_IMAGE_NAME} from #{path}"
 
