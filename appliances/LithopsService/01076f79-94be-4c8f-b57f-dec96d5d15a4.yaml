@@ -23,7 +23,6 @@ hypervisor: KVM
 opennebula_version: 6.8, 6.10
 opennebula_template:
   context:
-    network: 'YES'
     fallback_dns: '$FALLBACK_DNS'
     fallback_gw: '$FALLBACK_GW'
     network: 'YES'
