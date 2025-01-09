@@ -6,11 +6,12 @@ require 'yaml'
 require 'fileutils'
 
 if ARGV.empty?
-    STDERR.puts 'Usage: ./app_readiness.rb <app_name>'
+    STDERR.puts 'Usage: ./app_readiness.rb <app_name> <image_location>'
     exit(1)
 end
 
 app = ARGV[0] # 'example'
+ENV['IMG_LOCATION'] = ARGV[1]
 
 tests_list_path = "../../#{app}/tests.yaml"
 tests_path = "../../#{app}/tests"
