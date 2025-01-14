@@ -78,7 +78,7 @@ def generate_context(metadata)
     context_input = <<~EOT
         ---
         :tests:
-          '##{name}':
+          '#{name}':
             :image_name: #{name}.#{metadata[:infra][:disk_format]}
             :type: #{metadata[:app][:os][:type]}
             :microenvs: ['context-#{metadata[:app][:hypervisor].downcase}']
