@@ -14,10 +14,6 @@ $(SERVICES): %: packer-%
 packer-%: ${DIR_EXPORT}/%.qcow2
 	@${INFO} "Packer ${*} done"
 
-# Define if your appliance depends on a distro. This example builds on top of alma8 packer build
-packer-service_example: packer-alma8 ${DIR_EXPORT}/service_example.qcow2
-	@${INFO} "Packer service_example done"
-
 # run packer build for given distro or service
 ${DIR_EXPORT}/%.qcow2:
 	$(eval DISTRO_NAME := $(shell echo ${*} | sed 's/[0-9].*//'))

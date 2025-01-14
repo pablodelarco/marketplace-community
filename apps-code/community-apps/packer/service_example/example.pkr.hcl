@@ -75,8 +75,8 @@ build {
 
   provisioner "file" {
     sources = [
-      "appliances/scripts/net-90-service-appliance",
-      "appliances/scripts/net-99-report-ready",
+      "../one-apps/appliances/scripts/net-90-service-appliance",
+      "../one-apps/appliances/scripts/net-99-report-ready",
     ]
     destination = "/etc/one-appliance/"
   }
@@ -93,7 +93,7 @@ build {
   # Contains the appliance service management tool
   # https://github.com/OpenNebula/one-apps/wiki/apps_intro#appliance-life-cycle
   provisioner "file" {
-    source      = "appliances/service.sh"
+    source      = "../one-apps/appliances/service.sh"
     destination = "/etc/one-appliance/service"
   }
   # Pull your own custom logic here. Must be called appliance.sh if using bash tools
