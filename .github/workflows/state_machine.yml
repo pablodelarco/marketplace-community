@@ -21,6 +21,11 @@ jobs:
     if: startsWith(github.event.label.name, 'do_tests')
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -30,6 +35,11 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           echo -e "Host *\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
 
+      - name: Install yq
+        run: |
+          sudo apt-get update
+          sudo apt-get install yq
+
       - name: Trigger Jenkins
         env:
           VPN_SERVER: ${{ secrets.VPN_SERVER }}
@@ -38,9 +48,14 @@ jobs:
           JENKINS_USER: ${{ secrets.JENKINS_USER }}
           JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
         run: |
+          METADATA_PATH="apps-code/community-apps/appliances/${{ github.event.pull_request.title }}/metadata.yaml"
+          DISTRO=$(yq '.[":app"][":name"]' $METADATA_PATH)
+          REQUIREMENTS=$(yq '.[":app"][":os"][":base"]' $METADATA_PATH)
           ssh -i ~/.ssh/id_rsa gitact@$VPN_SERVER -p 2222 "curl -X POST $JENKINS_URL/job/one-community-distro/buildWithParameters?token=$ONE_DISTRO_TOKEN \
             --user $JENKINS_USER:$JENKINS_TOKEN \
-            --data DISTROS=${{ github.event.pull_request.title }} \
+            --data DISTROS=$DISTRO \
+            --data REQUIREMENTS=$REQUIREMENTS \
+            --data RUN_CONTEXT=true \
             --data PR_NUMBER=${{ github.event.pull_request.number }}"
             
       - name: Update labels
