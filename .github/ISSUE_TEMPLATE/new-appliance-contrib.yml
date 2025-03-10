@@ -15,7 +15,7 @@ body:
       label: Appliance Compatibility
       description: Please, specify OpenNebula versions the new appliance is compatible with
       options:
-        - label: 6.10
+        - label: "6.10"
           required: true
   - type: textarea
     id: documentation
