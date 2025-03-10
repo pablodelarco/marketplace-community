@@ -1,5 +1,5 @@
 name: New Appliance Contribution Request
-description: New Appliance Contribution Request Form.
+description: New Appliance Contribution Request Form
 title: "[New Appliance]: "
 body:
   - type: textarea
@@ -34,12 +34,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Steps to contribute:
+       *Steps to contribute:*
           1. Submit the Form: Fill out all sections of the form with the required information.
           2. Initial Review: Our team will review your submission for completeness and initial compliance.
           3. Certification Testing: Your appliance will undergo compatibility, performance, and security testing.
           4. Documentation Review: We will review your documentation for clarity and thoroughness.
           5. Feedback: If needed, we will provide feedback for revisions.
           6. Final Approval: Once approved, your appliance will be published in the Community Marketplace.
+
         
         Thank you for your contribution and commitment to enhancing the OpenNebula ecosystem! If you have any questions or need assistance, please, contact our support team. 
