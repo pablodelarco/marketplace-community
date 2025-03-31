@@ -21,7 +21,7 @@ source "qemu" "rabbitmq" {
   memory      = 2048
   accelerator = "kvm"
 
-  iso_url      = "../one-apps/export/ubuntu2404.qcow2"
+  iso_url      = "../one-apps/export/ubuntu2204.qcow2"
   iso_checksum = "none"
 
   headless = var.headless

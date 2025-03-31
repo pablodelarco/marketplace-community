@@ -1,0 +1,45 @@
+---
+name: RabbitMQ
+version: 6.10.0-3-20250331
+publisher: OpenNebula Systems
+description: |-
+  Appliance with preinstalled [RabbitMQ](https://www.rabbitmq.com/docs).
+
+  See the dedicated [documentation](https://github.com/OpenNebula/marketplace-community/wiki/rabbitmq_quick).
+short_description: Appliance with preinstalled RabbitMQ for KVM hosts
+tags:
+- rabbitmq
+- ubuntu
+- service
+format: qcow2
+creation_time: 1743414061
+os-id: Ubuntu
+os-release: 22.04 LTS
+os-arch: x86_64
+hypervisor: KVM
+opennebula_version: 6.8, 6.10
+opennebula_template:
+  context:
+    network: 'YES'
+    ssh_public_key: "$USER[SSH_PUBLIC_KEY]"
+  cpu: '1'
+  graphics:
+    listen: 0.0.0.0
+    type: vnc
+  inputs_order: ''
+  memory: '1024'
+  os:
+    arch: x86_64
+  user_inputs: {}
+logo: rabbitmq.png
+images:
+- name: service_rabbitmq
+  url: >-
+    https://d24fmfybwxpuhu.cloudfront.net/service_Lithops-6.10.0-3-20250128.qcow2
+  type: OS
+  dev_prefix: vd
+  driver: qcow2
+  size: 21
+  checksum:
+    md5: 
+    sha256: 

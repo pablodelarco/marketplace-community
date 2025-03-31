@@ -18,14 +18,27 @@ ONE_SERVICE_SETUP_DIR="/opt/one-appliance" ### Install location. Required by bas
 # These variables are defined in the CONTEXT section of the VM Template as custom variables
 # https://docs.opennebula.io/6.8/management_and_operations/references/template.html#context-section
 ONE_SERVICE_PARAMS=(
-    'ONEAPP_RABBITMQ_DEFAULT_USER'     'configure' 'User to create when RabbitMQ creates a new database'               ''
-    'ONEAPP_RABBITMQ_DEFAULT_PASS'     'configure' 'Password for the default user'               ''
-    'ONEAPP_RABBITMQ_LOG_LEVEL'        'configure' 'Controls the granularity of logging'               ''
+    'ONEAPP_RABBITMQ_NODE_PORT'        'configure' 'Port on which the RabbitMQ node will listen for connections'          ''
+    'ONEAPP_RABBITMQ_LOOPBACK_USER'    'configure' 'Allow the user to connect remotely'                                   ''
+    'ONEAPP_RABBITMQ_DEFAULT_USER'     'configure' 'User to create when RabbitMQ creates a new database'                  ''
+    'ONEAPP_RABBITMQ_DEFAULT_PASS'     'configure' 'Password for the new user'                                            ''
+    'ONEAPP_RABBITMQ_LOG_LEVEL'        'configure' 'Controls the granularity of logging'                                  ''
 )
 # Default values for when the variable doesn't exist on the VM Template
-ONEAPP_RABBITMQ_DEFAULT_USER="${ONEAPP_RABBITMQ_DEFAULT_USER:-guest}"
+ONEAPP_RABBITMQ_NODE_PORT="${ONEAPP_RABBITMQ_NODE_PORT:-5672}"
+ONEAPP_RABBITMQ_LOOPBACK_USER="${ONEAPP_RABBITMQ_LOOPBACK_USER:-false}"
+ONEAPP_RABBITMQ_DEFAULT_USER="${ONEAPP_RABBITMQ_DEFAULT_USER:-oneadmin}"
 ONEAPP_RABBITMQ_DEFAULT_PASS="${ONEAPP_RABBITMQ_DEFAULT_PASS:-$(gen_password ${PASSWORD_LENGTH})}"
 ONEAPP_RABBITMQ_LOG_LEVEL="${ONEAPP_RABBITMQ_LOG_LEVEL:-info}"
+
+### Appliance metadata ###############################################
+
+# Appliance metadata
+ONE_SERVICE_NAME='Service RabbitMQ - KVM'
+ONE_SERVICE_BUILD=$(date +%s)
+ONE_SERVICE_SHORT_DESCRIPTION='Appliance with preinstalled RabbitMQ for KVM hosts'
+ONE_SERVICE_RECONFIGURABLE=true
+
 
 # You can make this parameters a required step of the VM instantiation wizard by using the USER_INPUTS feature
 # https://docs.opennebula.io/6.8/management_and_operations/vm_management/vm_templates.html?#user-inputs
@@ -44,6 +57,7 @@ ONEAPP_RABBITMQ_LOG_LEVEL="${ONEAPP_RABBITMQ_LOG_LEVEL:-info}"
 
 service_install()
 {
+
     echo "Updating package list"
     sudo apt-get update -y || { echo "Failed to update package list"; exit 1; }
 
@@ -59,37 +73,36 @@ service_install()
     sudo tee /etc/apt/sources.list.d/rabbitmq.list <<EOF
 ## Provides modern Erlang/OTP releases
 ##
-deb [arch=amd64 signed-by=/usr/share/keyrings/rabbitmq.E495BB49CC4BBE5B.gpg] https://ppa1.rabbitmq.com/rabbitmq/rabbitmq-erlang/deb/ubuntu noble main
-deb-src [signed-by=/usr/share/keyrings/rabbitmq.E495BB49CC4BBE5B.gpg] https://ppa1.rabbitmq.com/rabbitmq/rabbitmq-erlang/deb/ubuntu noble main
+deb [arch=amd64 signed-by=/usr/share/keyrings/rabbitmq.E495BB49CC4BBE5B.gpg] https://ppa1.rabbitmq.com/rabbitmq/rabbitmq-erlang/deb/ubuntu jammy main
+deb-src [signed-by=/usr/share/keyrings/rabbitmq.E495BB49CC4BBE5B.gpg] https://ppa1.rabbitmq.com/rabbitmq/rabbitmq-erlang/deb/ubuntu jammy main
 
-deb [arch=amd64 signed-by=/usr/share/keyrings/rabbitmq.E495BB49CC4BBE5B.gpg] https://ppa2.rabbitmq.com/rabbitmq/rabbitmq-erlang/deb/ubuntu noble main
-deb-src [signed-by=/usr/share/keyrings/rabbitmq.E495BB49CC4BBE5B.gpg] https://ppa2.rabbitmq.com/rabbitmq/rabbitmq-erlang/deb/ubuntu noble main
+# another mirror for redundancy
+deb [arch=amd64 signed-by=/usr/share/keyrings/rabbitmq.E495BB49CC4BBE5B.gpg] https://ppa2.rabbitmq.com/rabbitmq/rabbitmq-erlang/deb/ubuntu jammy main
+deb-src [signed-by=/usr/share/keyrings/rabbitmq.E495BB49CC4BBE5B.gpg] https://ppa2.rabbitmq.com/rabbitmq/rabbitmq-erlang/deb/ubuntu jammy main
 
 ## Provides RabbitMQ
 ##
-deb [arch=amd64 signed-by=/usr/share/keyrings/rabbitmq.9F4587F226208342.gpg] https://ppa1.rabbitmq.com/rabbitmq/rabbitmq-server/deb/ubuntu noble main
-deb-src [signed-by=/usr/share/keyrings/rabbitmq.9F4587F226208342.gpg] https://ppa1.rabbitmq.com/rabbitmq/rabbitmq-server/deb/ubuntu noble main
+deb [arch=amd64 signed-by=/usr/share/keyrings/rabbitmq.9F4587F226208342.gpg] https://ppa1.rabbitmq.com/rabbitmq/rabbitmq-server/deb/ubuntu jammy main
+deb-src [signed-by=/usr/share/keyrings/rabbitmq.9F4587F226208342.gpg] https://ppa1.rabbitmq.com/rabbitmq/rabbitmq-server/deb/ubuntu jammy main
 
-deb [arch=amd64 signed-by=/usr/share/keyrings/rabbitmq.9F4587F226208342.gpg] https://ppa2.rabbitmq.com/rabbitmq/rabbitmq-server/deb/ubuntu noble main
-deb-src [signed-by=/usr/share/keyrings/rabbitmq.9F4587F226208342.gpg] https://ppa2.rabbitmq.com/rabbitmq/rabbitmq-server/deb/ubuntu noble main
+# another mirror for redundancy
+deb [arch=amd64 signed-by=/usr/share/keyrings/rabbitmq.9F4587F226208342.gpg] https://ppa2.rabbitmq.com/rabbitmq/rabbitmq-server/deb/ubuntu jammy main
+deb-src [signed-by=/usr/share/keyrings/rabbitmq.9F4587F226208342.gpg] https://ppa2.rabbitmq.com/rabbitmq/rabbitmq-server/deb/ubuntu jammy main
 EOF
 
     echo "Updating package list again"
     sudo apt-get update -y || { echo "Failed to update package list after adding repositories"; exit 1; }
+
 
     echo "Installing Erlang packages"
     sudo apt-get install -y erlang-base \
                         erlang-asn1 erlang-crypto erlang-eldap erlang-ftp erlang-inets \
                         erlang-mnesia erlang-os-mon erlang-parsetools erlang-public-key \
                         erlang-runtime-tools erlang-snmp erlang-ssl \
-                        erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl || { echo "Failed to install Erlang packages"; exit 1; }
+                        erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl
 
     echo "Installing RabbitMQ server"
     sudo apt-get install rabbitmq-server -y --fix-missing || { echo "Failed to install RabbitMQ server"; exit 1; }
-
-    echo "Enabling and starting RabbitMQ service"
-    sudo systemctl enable rabbitmq-server
-    sudo systemctl start rabbitmq-server || { echo "Failed to start RabbitMQ service"; exit 1; }
 
     # cleanup
     postinstall_cleanup
@@ -115,9 +128,10 @@ EOF
 
     chmod 600 "$ONE_SERVICE_REPORT"
 
-    msg info "Enable services"
+    msg info "Starting services"
     systemctl enable rabbitmq-server
-
+    systemctl start rabbitmq-server
+    rabbitmqctl change_password ${ONEAPP_RABBITMQ_DEFAULT_USER} ${ONEAPP_RABBITMQ_DEFAULT_PASS}
     msg info "CONFIGURATION FINISHED"
 
     return 0
@@ -167,16 +181,16 @@ EOL
 sudo tee "$RABBITMQ_CONFIG_FILE" > /dev/null <<EOL
 
 ## Networking
-# listeners.tcp.default = 5672
+listeners.tcp.default = $ONEAPP_RABBITMQ_NODE_PORT
 
 ## Users & Security
-default_user = "$ONEAPP_RABBITMQ_DEFAULT_USER"
-default_pass = "$ONEAPP_RABBITMQ_DEFAULT_PASS"
+default_user = $ONEAPP_RABBITMQ_DEFAULT_USER
+default_pass = $ONEAPP_RABBITMQ_DEFAULT_PASS
 # default_user_tags.administrator = true
-loopback_users.guest = true
+loopback_users.$ONEAPP_RABBITMQ_DEFAULT_USER = $ONEAPP_RABBITMQ_LOOPBACK_USER
 
 ## Log level for file logging
-log.file.level = "$ONEAPP_RABBITMQ_LOG_LEVEL"
+log.file.level = $ONEAPP_RABBITMQ_LOG_LEVEL
 
 EOL
 
