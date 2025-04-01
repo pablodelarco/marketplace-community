@@ -21,6 +21,7 @@ opennebula_version: 6.8, 6.10
 opennebula_template:
   context:
     network: 'YES'
+    set_hostname: "$NAME"
     ssh_public_key: "$USER[SSH_PUBLIC_KEY]"
   cpu: '1'
   graphics:
@@ -35,11 +36,11 @@ logo: rabbitmq.png
 images:
 - name: service_rabbitmq
   url: >-
-    https://d24fmfybwxpuhu.cloudfront.net/service_Lithops-6.10.0-3-20250128.qcow2
+    https://d24fmfybwxpuhu.cloudfront.net/service_rabbitmq-6.10.0-3-20250331.qcow2
   type: OS
   dev_prefix: vd
   driver: qcow2
-  size: 21
+  size: 2361393152
   checksum:
-    md5: 
-    sha256: 
+    md5: 403ed36feeaaf480cc840059b1bfc63f
+    sha256: 7ab9620f94df665e2286e0319b33859d3f71407876d14b3644a01e66e132a2b0
