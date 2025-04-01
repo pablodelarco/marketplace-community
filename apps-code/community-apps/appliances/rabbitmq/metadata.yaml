@@ -32,7 +32,7 @@
       GRAPHICS:
         LISTEN: 0.0.0.0
         TYPE: vnc
-      MEMORY: '1536'
+      MEMORY: '1024'
       NIC:
         NETWORK: service
       NIC_DEFAULT:
