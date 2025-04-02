@@ -29,7 +29,7 @@ ONE_SERVICE_PARAMS=(
     'ONEAPP_UERAN_AMF_PORT' 'configure' 'AMF_PORT' 'O|text'
     'ONEAPP_UERAN_SST_ID' 'configure' 'List of supported S-NSSAIs by this gNB slices' 'O|text'
     'ONEAPP_UERAN_UE_IMSI' 'configure' 'IMSI number of the UE. IMSI = [MCC|MNC|MSISDN] (In total 15 digits)' 'O|text'
-    'ONEAPP_UERAN_SUBSCRIPTOIN_KEY' 'configure' 'Permanent subscription key' 'O|text'
+    'ONEAPP_UERAN_SUBSCRIPTION_KEY' 'configure' 'Permanent subscription key' 'O|text'
     'ONEAPP_UERAN_OPERATOR_CODE' 'configure' 'Operator code (OP or OPC) of the UE' 'O|text'
     'ONEAPP_UERAN_VNF_IP' 'configure' 'IP of the virtual router to connect to the OneKE cluster' 'O|text'
     'ONEAPP_UERAN_CORE_SUBNET' 'configure' 'Subnet assigned to the 5G core services' 'O|text'
@@ -71,7 +71,7 @@ VNF_IP="${ONEAPP_UERAN_VNF_IP:-1}"
 CORE_SUBNET="${ONEAPP_UERAN_CORE_SUBNET:-1}"
 
 UE_IMSI="${ONEAPP_UERAN_UE_IMSI:-imsi-999700000000001}"
-SUBSCRIPTOIN_KEY="${ONEAPP_UERAN_SUBSCRIPTOIN_KEY:-465B5CE8B199B49FAA5F0A2EE238A6BC}"
+SUBSCRIPTION_KEY="${ONEAPP_UERAN_SUBSCRIPTION_KEY:-465B5CE8B199B49FAA5F0A2EE238A6BC}"
 OPERATOR_CODE="${ONEAPP_UERAN_OPERATOR_CODE:-E8ED289DEBA952E4283B54E88E6183CA}"
 #
 # ------------------------------------------------------------------------------
@@ -204,7 +204,7 @@ supi: '${UE_IMSI}'
 mcc: '${NETWORK_MCC}'
 mnc: '${NETWORK_MNC}'
 
-key: '${SUBSCRIPTOIN_KEY}'
+key: '${SUBSCRIPTION_KEY}'
 op: '${OPERATOR_CODE}'
 
 opType: 'OPC'
