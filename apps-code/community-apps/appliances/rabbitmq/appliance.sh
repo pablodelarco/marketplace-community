@@ -6,6 +6,7 @@
 ### RabbitMQ ##########################################################
 
 # For organization purposes is good to define here variables that will be used by your bash logic
+RABBITMQ_CONFIG_DIR=/etc/rabbitmq/
 RABBITMQ_CONFIG_FILE=/etc/rabbitmq/rabbitmq.conf
 RABBITMQ_ADVANCED_CONFIG_FILE=/etc/rabbitmq/advanced.config
 PASSWORD_LENGTH=16
@@ -18,18 +19,26 @@ ONE_SERVICE_SETUP_DIR="/opt/one-appliance" ### Install location. Required by bas
 # These variables are defined in the CONTEXT section of the VM Template as custom variables
 # https://docs.opennebula.io/6.8/management_and_operations/references/template.html#context-section
 ONE_SERVICE_PARAMS=(
-    'ONEAPP_RABBITMQ_NODE_PORT'        'configure' 'Port on which the RabbitMQ node will listen for connections'          ''
-    'ONEAPP_RABBITMQ_LOOPBACK_USER'    'configure' 'Allow the user to connect remotely'                                   ''
-    'ONEAPP_RABBITMQ_DEFAULT_USER'     'configure' 'User to create when RabbitMQ creates a new database'                  ''
-    'ONEAPP_RABBITMQ_DEFAULT_PASS'     'configure' 'Password for the new user'                                            ''
-    'ONEAPP_RABBITMQ_LOG_LEVEL'        'configure' 'Controls the granularity of logging'                                  ''
+    'ONEAPP_RABBITMQ_PORT'             'configure' 'Port on which RabbitMQ listens for connections'             'O|text'
+    'ONEAPP_RABBITMQ_LOOPBACK_USER'    'configure' 'Allow user to connect remotely'                             'O|boolean'
+    'ONEAPP_RABBITMQ_USER'             'configure' 'User for RabbitMQ service'                                  'O|text'
+    'ONEAPP_RABBITMQ_PASS'             'configure' 'Password for RabbitMQ service'                              'O|password'
+    'ONEAPP_RABBITMQ_LOG_LEVEL'        'configure' 'Controls the granularity of logging'                        'O|text'
+    'ONEAPP_RABBITMQ_TLS_ENABLED'      'configure' 'Enable TLS configuration'                                   'O|boolean'
+    'ONEAPP_RABBITMQ_PORT_TLS'         'configure' 'Port on which RabbitMQ listens for SSL connections.'        'O|text'
+    'ONEAPP_RABBITMQ_TLS_CERT'         'configure' 'Server certificate (.pem)'                                  'O|text64'
+    'ONEAPP_RABBITMQ_TLS_KEY'          'configure' 'Server certficate key (.key)'                               'O|text64'
+    'ONEAPP_RABBITMQ_TLS_PASS'         'configure' 'Server certificate password'                                'O|passsword'
+    'ONEAPP_RABBITMQ_TLS_CA'           'configure' 'CA certificate chain'                                       'O|text64'
 )
 # Default values for when the variable doesn't exist on the VM Template
-ONEAPP_RABBITMQ_NODE_PORT="${ONEAPP_RABBITMQ_NODE_PORT:-5672}"
-ONEAPP_RABBITMQ_LOOPBACK_USER="${ONEAPP_RABBITMQ_LOOPBACK_USER:-false}"
-ONEAPP_RABBITMQ_DEFAULT_USER="${ONEAPP_RABBITMQ_DEFAULT_USER:-oneadmin}"
-ONEAPP_RABBITMQ_DEFAULT_PASS="${ONEAPP_RABBITMQ_DEFAULT_PASS:-$(gen_password ${PASSWORD_LENGTH})}"
+ONEAPP_RABBITMQ_PORT="${ONEAPP_RABBITMQ_PORT:-5672}"
+ONEAPP_RABBITMQ_LOOPBACK_USER="${ONEAPP_RABBITMQ_LOOPBACK_USER:-NO}"
+ONEAPP_RABBITMQ_USER="${ONEAPP_RABBITMQ_USER:-rabbitadmin}"
+ONEAPP_RABBITMQ_PASS="${ONEAPP_RABBITMQ_PASS:-$(gen_password ${PASSWORD_LENGTH})}"
 ONEAPP_RABBITMQ_LOG_LEVEL="${ONEAPP_RABBITMQ_LOG_LEVEL:-info}"
+ONEAPP_RABBITMQ_TLS_ENABLED="${ONEAPP_RABBITMQ_TLS_ENABLED:-NO}"
+ONEAPP_RABBITMQ_PORT_TLS="${ONEAPP_RABBITMQ_PORT_TLS:-5671}"
 
 ### Appliance metadata ###############################################
 
@@ -116,14 +125,15 @@ service_configure()
     msg info "Stopping services"
     systemctl stop rabbitmq-server
 
-    setup_rabbitmq
+    setup_rabbitmq_basic
+    setup_rabbitmq_certs
 
     msg info "Credentials and config values are saved in: ${ONE_SERVICE_REPORT}"
 
     cat > "$ONE_SERVICE_REPORT" <<EOF
 [RabbitMQ user credentials]
-username = ${ONEAPP_RABBITMQ_DEFAULT_USER}
-password = ${ONEAPP_RABBITMQ_DEFAULT_PASS}
+username = ${ONEAPP_RABBITMQ_USER}
+password = ${ONEAPP_RABBITMQ_PASS}
 EOF
 
     chmod 600 "$ONE_SERVICE_REPORT"
@@ -131,9 +141,12 @@ EOF
     msg info "Starting services"
     systemctl enable rabbitmq-server
     systemctl start rabbitmq-server
-    rabbitmqctl change_password ${ONEAPP_RABBITMQ_DEFAULT_USER} ${ONEAPP_RABBITMQ_DEFAULT_PASS}
-    msg info "CONFIGURATION FINISHED"
+    rabbitmqctl add_user ${ONEAPP_RABBITMQ_USER} ${ONEAPP_RABBITMQ_PASS}
+    rabbitmqctl set_permissions -p / ${ONEAPP_RABBITMQ_USER} ".*" ".*" ".*"
+    rabbitmqctl set_user_tags ${ONEAPP_RABBITMQ_USER} administrator
+    rabbitmqctl delete_user guest
 
+    msg info "CONFIGURATION FINISHED"
     return 0
 }
 
@@ -163,16 +176,14 @@ service_cleanup()
 # functions
 #
 
-setup_rabbitmq()
+setup_rabbitmq_basic()
 {
 
 sudo tee /etc/rabbitmq/rabbitmq-env.conf > /dev/null <<EOL
 
 ## Set log file locations
-NODENAME=rabbit@$(hostname -f)
 RABBITMQ_CONFIG_FILE="$RABBITMQ_CONFIG_FILE"
 RABBITMQ_ADVANCED_CONFIG_FILE="$RABBITMQ_ADVANCED_CONFIG_FILE"
-RABBITMQ_CONF_ENV_FILE=/path/to/a/custom/location/rabbitmq-env.conf
 RABBITMQ_LOGS=/var/log/rabbitmq/rabbitmq.log
 RABBITMQ_SASL_LOGS=/var/log/rabbitmq/rabbitmq-sasl.log
 
@@ -181,19 +192,96 @@ EOL
 sudo tee "$RABBITMQ_CONFIG_FILE" > /dev/null <<EOL
 
 ## Networking
-listeners.tcp.default = $ONEAPP_RABBITMQ_NODE_PORT
+listeners.tcp.default = $ONEAPP_RABBITMQ_PORT
 
 ## Users & Security
-default_user = $ONEAPP_RABBITMQ_DEFAULT_USER
-default_pass = $ONEAPP_RABBITMQ_DEFAULT_PASS
-# default_user_tags.administrator = true
-loopback_users.$ONEAPP_RABBITMQ_DEFAULT_USER = $ONEAPP_RABBITMQ_LOOPBACK_USER
+default_user = $ONEAPP_RABBITMQ_USER
+default_pass = $ONEAPP_RABBITMQ_PASS
+loopback_users.$ONEAPP_RABBITMQ_USER = $( [[ "${ONEAPP_RABBITMQ_LOOPBACK_USER,,}" == "yes" ]] && echo "true" || echo "false" )
 
 ## Log level for file logging
 log.file.level = $ONEAPP_RABBITMQ_LOG_LEVEL
 
 EOL
 
+
+}
+
+
+setup_rabbitmq_certs()
+{
+
+    ## TLS Certificates
+    #  If TLS certificate and key are provided from contextualization.
+    #  Based on https://www.rabbitmq.com/docs/ssl#enabling-tls
+    local_rabbitmq_certs_path="/opt/rabbitmq/certs"
+
+    if [[ ${ONEAPP_RABBITMQ_TLS_ENABLED} =~ ^(yes|YES)$ ]]; then
+        msg info "Configuring TLS Certificates..."
+        if [[ -f "${local_rabbitmq_certs_path}/server.pem" ]] || [[ -f "${local_rabbitmq_certs_path}/server.key" ]]; then
+            msg info "Certificates already exist. Skipping."
+        else
+            msg info "Create folder for TLS certificates: ${local_rabbitmq_certs_path}"
+            mkdir -p ${local_rabbitmq_certs_path}
+
+            if [[ -z "${ONEAPP_RABBITMQ_TLS_CERT}" ]] || [[ -z "${ONEAPP_RABBITMQ_TLS_KEY}" ]]; then
+                msg info "No Certs provided, autogenerating TLS certificates..."
+                generate_tls_certs
+            else
+                msg info "Configuring provided TLS certificates..."
+                echo ${ONEAPP_RABBITMQ_TLS_CA} | base64 --decode >> /opt/rabbitmq/certs/ca.pem
+                echo ${ONEAPP_RABBITMQ_TLS_CERT} | base64 --decode >> /opt/rabbitmq/certs/server.pem
+                echo ${ONEAPP_RABBITMQ_TLS_KEY} | base64 --decode >> /opt/rabbitmq/certs/server.key
+            fi
+
+            sudo tee -a "$RABBITMQ_CONFIG_FILE" > /dev/null <<EOL
+
+## TLS Configuration
+listeners.ssl.default = $ONEAPP_RABBITMQ_PORT_TLS
+ssl_options.cacertfile = /opt/rabbitmq/certs/ca.pem
+ssl_options.certfile   = /opt/rabbitmq/certs/server.pem
+ssl_options.keyfile    = /opt/rabbitmq/certs/server.key
+ssl_options.verify     = verify_peer
+ssl_options.fail_if_no_peer_cert = false
+EOL
+
+            # Append ssl_options.password only if ONEAPP_RABBITMQ_TLS_PASS and ONEAPP_RABBITMQ_TLS_KEY are set
+            if [[ -n "$ONEAPP_RABBITMQ_TLS_PASS" && -n "$ONEAPP_RABBITMQ_TLS_KEY" ]]; then
+                echo "ssl_options.password = $ONEAPP_RABBITMQ_TLS_PASS" | sudo tee -a "$RABBITMQ_CONFIG_FILE" > /dev/null
+            fi
+            msg info "Give ownership of /opt/rabbitmq to rabbitmq user"
+            chown -R rabbitmq:rabbitmq /opt/rabbitmq
+        fi
+    fi
+
+
+
+}
+
+
+generate_tls_certs()
+{
+    local_rabbitmq_certs_path="/opt/rabbitmq/certs"
+
+    # Generate a CA certificate first
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout ${local_rabbitmq_certs_path}/ca.key \
+        -out ${local_rabbitmq_certs_path}/ca.pem \
+        -subj "/C=US/ST=California/L=San Francisco/O=Example Company/CN=$(hostname -f)" > /dev/null 2>&1
+
+    # Generate a server private key
+    openssl genpkey -algorithm RSA -out ${local_rabbitmq_certs_path}/server.key > /dev/null 2>&1
+
+    # Generate the server CSR
+    openssl req -new -key ${local_rabbitmq_certs_path}/server.key -out ${local_rabbitmq_certs_path}/server.csr \
+        -subj "/C=US/ST=California/L=San Francisco/O=Example Company/CN=$(hostname -f)" > /dev/null 2>&1
+
+    # Sign the server CSR with the CA certificate and key
+    openssl x509 -req -in ${local_rabbitmq_certs_path}/server.csr -CA ${local_rabbitmq_certs_path}/ca.pem \
+        -CAkey ${local_rabbitmq_certs_path}/ca.key -CAcreateserial -out ${local_rabbitmq_certs_path}/server.pem -days 365 > /dev/null 2>&1
+
+    # Clean up the CSR (optional)
+    rm ${local_rabbitmq_certs_path}/server.csr
 
 }
 

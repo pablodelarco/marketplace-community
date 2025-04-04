@@ -21,17 +21,33 @@ opennebula_version: 6.8, 6.10
 opennebula_template:
   context:
     network: 'YES'
-    set_hostname: "$NAME"
+    oneapp_rabbitmq_user: "$ONEAPP_RABBITMQ_USER"
+    oneapp_rabbitmq_pass: "$ONEAPP_RABBITMQ_PASS"
+    oneapp_rabbitmq_loopback_user: "$ONEAPP_RABBITMQ_LOOPBACK_USER"
+    oneapp_rabbitmq_tls_enabled: "$ONEAPP_RABBITMQ_TLS_ENABLED"
+    oneapp_rabbitmq_tls_cert: "$ONEAPP_RABBITMQ_TLS_CERT"
+    oneapp_rabbitmq_tls_key: "$ONEAPP_RABBITMQ_TLS_KEY"
+    oneapp_rabbitmq_tls_pass: "$ONEAPP_RABBITMQ_TLS_PASS"
+    oneapp_rabbitmq_tls_ca: "$ONEAPP_RABBITMQ_TLS_CA"
     ssh_public_key: "$USER[SSH_PUBLIC_KEY]"
   cpu: '1'
   graphics:
     listen: 0.0.0.0
     type: vnc
-  inputs_order: ''
+  inputs_order: >-
+    ONEAPP_RABBITMQ_USER,ONEAPP_RABBITMQ_PASS,ONEAPP_RABBITMQ_LOOPBACK_USER,ONEAPP_RABBITMQ_TLS_ENABLED,ONEAPP_RABBITMQ_TLS_CERT,ONEAPP_RABBITMQ_TLS_KEY,ONEAPP_RABBITMQ_TLS_PASS,ONEAPP_RABBITMQ_TLS_CA
   memory: '1024'
   os:
     arch: x86_64
-  user_inputs: {}
+  user_inputs:
+    oneapp_rabbitmq_user: O|text|RabbitMQ admin user| |rabbitadmin
+    oneapp_rabbitmq_pass:  O|password|RabbitMQ admin user password
+    oneapp_rabbitmq_loopback_user:  M|boolean|Enable remote admin access| |YES
+    oneapp_rabbitmq_tls_enabled:  M|boolean|Enable TLS configuration| |NO
+    oneapp_rabbitmq_tls_cert: O|text64|RabbitMQ server certificate (.pem)
+    oneapp_rabbitmq_tls_key: O|text64|RabbitMQ server key (.key)
+    oneapp_rabbitmq_tls_pass: O|password|RabbitMQ server key password
+    oneapp_rabbitmq_tls_ca: O|text64|RabbitMQ CA chain (.pem)
 logo: rabbitmq.png
 images:
 - name: service_rabbitmq
@@ -42,5 +58,5 @@ images:
   driver: qcow2
   size: 2361393152
   checksum:
-    md5: eb9a4ff409e58229fd0ab3906c7819cf
-    sha256: 20753bae25cbd42b8f9faf989764ec7f8e02d5244b66030f0315f496e4e970b9
+    md5: ef8734689914c60abd6c055d1e11b7f3
+    sha256: 8efa114b13c3b9bd820e581117662fe12cc03826b1135925408eccaa26024a84
