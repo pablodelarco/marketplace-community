@@ -1,6 +1,6 @@
 ---
 name: UERANSIM
-version: 6.10.0-3-20250128
+version: 6.10.0-3-20250404
 publisher: OpenNebula Systems
 description: |-
   Appliance with a pre-installed version of the [UERANSIM](https://github.com/aligungr/UERANSIM) 5G UE and RAN (gNodeB) simulator.
@@ -12,7 +12,7 @@ tags:
 - ubuntu
 - service
 format: qcow2
-creation_time: 1734523165
+creation_time: 1743762026
 os-id: Ubuntu
 os-release: 22.04 LTS
 os-arch: x86_64
@@ -32,7 +32,7 @@ opennebula_template:
     oneapp_ueran_amf_port: "$ONEAPP_UERAN_AMF_PORT"
     oneapp_ueran_sst_id: "$ONEAPP_UERAN_SST_ID"
     oneapp_ueran_ue_imsi: "$ONEAPP_UERAN_UE_IMSI"
-    oneapp_ueran_subscriptoin_key: "$ONEAPP_UERAN_SUBSCRIPTOIN_KEY"
+    oneapp_ueran_subscription_key: "$ONEAPP_UERAN_SUBSCRIPTION_KEY"
     oneapp_ueran_operator_code: "$ONEAPP_UERAN_OPERATOR_CODE"
     oneapp_ueran_vnf_ip: "$ONEAPP_UERAN_VNF_IP"
     oneapp_ueran_core_subnet: "$ONEAPP_UERAN_CORE_SUBNET"
@@ -55,7 +55,7 @@ opennebula_template:
     oneapp_ueran_sst_id: O|text|List of supported S-NSSAIs by this gNB slices| |1
     oneapp_ueran_ue_imsi: >-
       O|text|IMSI number of the UE. IMSI = [MCC,MNC,MSISDN] (In total 15 digits)| |imsi-999700000000001
-    oneapp_ueran_subscriptoin_key: O|text|Permanent subscription key| |465B5CE8B199B49FAA5F0A2EE238A6BC
+    oneapp_ueran_subscription_key: O|text|Permanent subscription key| |465B5CE8B199B49FAA5F0A2EE238A6BC
     oneapp_ueran_operator_code: >-
       O|text|Operator code (OP or OPC) of the UE| |E8ED289DEBA952E4283B54E88E6183CA
     oneapp_ueran_vnf_ip: O|text|IP of the virtual router to connect to the OneKE cluster| |1
@@ -64,11 +64,11 @@ logo: ueransim.png
 images:
 - name: service_ueransim
   url: >-
-    https://opennebula-marketplace.s3.amazonaws.com/service_ueransim-6.10.0-3-20250128.qcow2
+    https://opennebula-marketplace.s3.amazonaws.com/service_ueransim-6.10.0-3-20250404.qcow2
   type: OS
   dev_prefix: vd
   driver: qcow2
   size: 10737418240
   checksum:
-    md5: 155d09d9547b19561e2a04af0f0a8d6a
-    sha256: 5033f4a0536bee6d3aded6e3290f8dae1b3448a7b2c3304ffcb89ec18d6be3b4
+    md5: 00cf1ffec82d25794f8174554296be77
+    sha256: ae1b8e9d0d0270d4ca90afc63668426fd9ab01f3ad7931438cba142f37db7bfd
