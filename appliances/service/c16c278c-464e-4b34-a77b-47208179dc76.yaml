@@ -41,9 +41,9 @@ opennebula_template:
     arch: x86_64
   user_inputs:
     oneapp_rabbitmq_user: O|text|RabbitMQ admin user| |rabbitadmin
-    oneapp_rabbitmq_pass:  O|password|RabbitMQ admin user password
-    oneapp_rabbitmq_loopback_user:  M|boolean|Enable remote admin access| |YES
-    oneapp_rabbitmq_tls_enabled:  M|boolean|Enable TLS configuration| |NO
+    oneapp_rabbitmq_pass: O|password|RabbitMQ admin user password
+    oneapp_rabbitmq_loopback_user: M|boolean|Enable remote admin access| |YES
+    oneapp_rabbitmq_tls_enabled: M|boolean|Enable TLS configuration| |NO
     oneapp_rabbitmq_tls_cert: O|text64|RabbitMQ server certificate (.pem)
     oneapp_rabbitmq_tls_key: O|text64|RabbitMQ server key (.key)
     oneapp_rabbitmq_tls_pass: O|password|RabbitMQ server key password
