@@ -11,8 +11,8 @@
     :params:
       :ONEAPP_RABBITMQ_NODE_PORT: '5672'
       :ONEAPP_RABBITMQ_LOOPBACK_USER: 'false'
-      :ONEAPP_RABBITMQ_DEFAULT_USER: 'oneadmin'
-      :ONEAPP_RABBITMQ_DEFAULT_PASS: 'opennebula'
+      :ONEAPP_RABBITMQ_USER: 'rabbitadmin'
+      :ONEAPP_RABBITMQ_PASS: 'opennebula'
       :ONEAPP_RABBITMQ_LOG_LEVEL: 'debug'
 
 :one:
