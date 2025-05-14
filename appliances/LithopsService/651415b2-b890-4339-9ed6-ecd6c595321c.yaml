@@ -58,8 +58,6 @@ opennebula_template:
         NAME = "NIC1",
         NETWORK_ID = "$Private"
       ]
-      ONEAPP_VROUTER_ETH0_VIP0 = "$ONEAPP_VROUTER_ETH0_VIP0"
-      ONEAPP_VROUTER_ETH1_VIP0 = "$ONEAPP_VROUTER_ETH1_VIP0"
       ONEAPP_VNF_HAPROXY_INTERFACES = "$ONEAPP_VNF_HAPROXY_INTERFACES"
       ONEAPP_VNF_HAPROXY_REFRESH_RATE = "$ONEAPP_VNF_HAPROXY_REFRESH_RATE"
       ONEAPP_VNF_DNS_ENABLED = "$ONEAPP_VNF_DNS_ENABLED"
@@ -68,7 +66,7 @@ opennebula_template:
       ONEAPP_VNF_NAT4_ENABLED = "$ONEAPP_VNF_NAT4_ENABLED"
       ONEAPP_VNF_NAT4_INTERFACES_OUT = "$ONEAPP_VNF_NAT4_INTERFACES_OUT"
       ONEAPP_VNF_ROUTER4_ENABLED = "$ONEAPP_VNF_ROUTER4_ENABLED"
-      ONEAPP_VNF_ROUTER4_INTERFACES = "$ONEAPP_VNF_ROUTER4_INTERFACES""
+      ONEAPP_VNF_ROUTER4_INTERFACES = "$ONEAPP_VNF_ROUTER4_INTERFACES"
     cooldown: 120
     elasticity_policies: []
     scheduled_policies: []
@@ -101,13 +99,11 @@ opennebula_template:
       ]
       FALLBACK_GW = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
       FALLBACK_DNS = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
-      ONEAPP_VROUTER_ETH0_VIP0 = "$ONEAPP_VROUTER_ETH0_VIP0"
-      ONEAPP_VROUTER_ETH1_VIP0 = "$ONEAPP_VROUTER_ETH1_VIP0"
       ONEAPP_AMQP_USER = "$ONEAPP_RABBITMQ_DEFAULT_USER"
       ONEAPP_AMQP_PASS = "$ONEAPP_RABBITMQ_DEFAULT_PASS"
       ONEAPP_AMQP_HOST = "${rabbitmq.TEMPLATE.CONTEXT.ETH0_IP}"
       ONEAPP_AMQP_PORT = "5672"
-      ONEAPP_VNF_DNS_ENABLED = "$ONEAPP_VNF_DNS_ENABLED""
+      ONEAPP_VNF_DNS_ENABLED = "$ONEAPP_VNF_DNS_ENABLED"
     cooldown: 120
     elasticity_policies: []
     scheduled_policies: []
@@ -125,7 +121,7 @@ opennebula_template:
       ONEAPP_MINIO_ROOT_USER="$ONEAPP_MINIO_ROOT_USER"
       ONEAPP_MINIO_ROOT_PASSWORD="$ONEAPP_MINIO_ROOT_PASSWORD"
       ONEAPP_MINIO_HOSTNAME="minio.opennebula.local"
-      ONEAPP_MINIO_TLS_ENABLED="NO""
+      ONEAPP_MINIO_TLS_ENABLED="NO"
     cooldown: 120
     elasticity_policies: []
     scheduled_policies: []
@@ -156,10 +152,8 @@ opennebula_template:
       ONEAPP_AMQP_PASS="$ONEAPP_RABBITMQ_DEFAULT_PASS"
       ONEAPP_AMQP_HOST="${rabbitmq.TEMPLATE.CONTEXT.ETH0_IP}"
       ONEAPP_AMQP_PORT="5672"
-      ONEAPP_ONEBE_WORKER_PROCESSES="${}"
-      ONEAPP_ONEBE_RUNTIME_TIMEOUT="${}"
-      ONEAPP_ONEBE_MAX_WORKERS="${}"
-      ONEAPP_ONEBE_MIN_WORKERS="${}"
+      ONEAPP_ONEBE_WORKER_PROCESSES="${lithops_worker.TEMPLATE.CPU}"
+      ONEAPP_ONEBE_RUNTIME_TIMEOUT="600"
     cooldown: 120
     elasticity_policies: []
     scheduled_policies: []
@@ -167,8 +161,6 @@ opennebula_template:
     Public: 'M|network|Public| |id::'
     Private: 'M|network|Private| |id::'
   custom_attrs:
-    ONEAPP_VROUTER_ETH0_VIP0: '0|text|Control Plane Endpoint VIP (IPv4)||'
-    ONEAPP_VROUTER_ETH1_VIP0: '0|text|Default Gateway VIP (IPv4)||'
     ONEAPP_STORAGE_DEVICE: '0|text|Storage device path||/dev/vdb'
     ONEAPP_STORAGE_FILESYSTEM: '0|text|Storage device filesystem||xfs'
     ONEAPP_VNF_HAPROXY_INTERFACES: '0|text|Interfaces to run Haproxy on||eth0'
