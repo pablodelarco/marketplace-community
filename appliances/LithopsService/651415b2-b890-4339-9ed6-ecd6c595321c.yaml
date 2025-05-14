@@ -3,7 +3,7 @@ name: Lithops Service
 version: 6.10.0-3-20250513
 publisher: OpenNebula Systems
 description: |-
-  Lithops Service deployment using RabbitMQ as message broker, Lithops Workers as compute backend and MinIO as storage backend, 
+  Lithops Service deployment using RabbitMQ as message broker, Lithops Workers as compute backend and MinIO as storage backend,
   orchestrated by [OneFlow](https://docs.opennebula.io/stable/management_and_operations/multivm_service_management/appflow_elasticity.html)
 
   Requires
