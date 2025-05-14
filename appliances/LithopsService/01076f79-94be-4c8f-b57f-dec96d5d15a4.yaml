@@ -47,8 +47,6 @@ opennebula_template:
     oneapp_amqp_port: '$ONEAPP_AMQP_PORT'
     oneapp_onebe_worker_processes: '$ONEAPP_ONEBE_WORKER_PROCESSES'
     oneapp_onebe_runtime_timeout: '$ONEAPP_ONEBE_RUNTIME_TIMEOUT'
-    oneapp_onebe_max_workers: '$ONEAPP_ONEBE_MAX_WORKERS'
-    oneapp_onebe_min_workers: '$ONEAPP_ONEBE_MIN_WORKERS'
     token: 'YES'
     start_script_base64: "bWtkaXIgL21udC9jb250ZXh0Cm1vdW50IC9kZXYvY2Ryb20gL21udC9jb250ZXh0"
     ssh_public_key: "$USER[SSH_PUBLIC_KEY]"
