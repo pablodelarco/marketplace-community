@@ -130,6 +130,7 @@ opennebula_template:
     - vnf
     - rabbitmq
     - minio
+    - lithops_worker
     cardinality: 1
     vm_template_contents: |
       NIC = [
