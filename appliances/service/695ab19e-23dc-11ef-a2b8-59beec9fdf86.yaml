@@ -50,7 +50,7 @@ logo: lithops.png
 images:
 - name: service_Lithops
   url: >-
-    https://opennebula-community-marketplace.s3.eu-west-1.amazonaws.com/service_Lithops-6.10.0-3-20250513.qcow2
+    https://d38nm155miqkyg.cloudfront.net/service_Lithops-6.10.0-3-20250513.qcow2
   type: OS
   dev_prefix: vd
   driver: qcow2
