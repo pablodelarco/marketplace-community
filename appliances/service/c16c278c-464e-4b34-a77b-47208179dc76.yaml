@@ -52,7 +52,7 @@ logo: rabbitmq.png
 images:
 - name: service_rabbitmq
   url: >-
-    https://opennebula-community-marketplace.s3.eu-west-1.amazonaws.com/service_rabbitmq-6.10.0-3-20250331.qcow2
+    https://d38nm155miqkyg.cloudfront.net/service_rabbitmq-6.10.0-3-20250331.qcow2
   type: OS
   dev_prefix: vd
   driver: qcow2
