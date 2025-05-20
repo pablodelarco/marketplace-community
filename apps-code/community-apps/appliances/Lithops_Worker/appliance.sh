@@ -55,8 +55,8 @@ ONEAPP_AMQP_PORT="${ONEAPP_AMQP_PORT:-5672}"
 
 ### Globals ##########################################################
 
-LITHOPS_REPO="https://github.com/OpenNebula/lithops.git"
-LITHOPS_BRANCH="f-569"
+LITHOPS_REPO="https://github.com/MarioRobres/lithops.git"
+LITHOPS_BRANCH="master"
 
 ###############################################################################
 ###############################################################################
