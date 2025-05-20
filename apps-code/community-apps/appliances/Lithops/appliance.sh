@@ -338,15 +338,9 @@ update_lithops_config(){
             msg info "Adding AMQP backend configuration to /etc/lithops/config"
             sed -i '/^lithops:/a\  monitoring: rabbitmq' /etc/lithops/config
 
-            sed -i -ne "/# Start Compute/ {
-            p;
-            ione:\n  worker_processes: ${ONEAPP_ONEBE_WORKER_PROCESSES}\n  runtime_memory: ${ONEAPP_ONEBE_RUNTIME_MEMORY}\n  runtime_timeout: ${ONEAPP_ONEBE_RUNTIME_TIMEOUT}\n  runtime_cpu: ${ONEAPP_ONEBE_RUNTIME_CPU}\n  amqp_url: ${ONEAPP_AMQP_URL}\n  max_workers: ${ONEAPP_ONEBE_MAX_WORKERS}\n  min_workers: ${ONEAPP_ONEBE_MIN_WORKERS}\n  autoscale: ${ONEAPP_ONEBE_AUTOSCALE}
-            }" -e ":a; n; /# End Compute/ {p; b}; ba; p" /etc/lithops/config
+            sed -i -ne "/# Start Compute/ {p; ione:\n  worker_processes: ${ONEAPP_ONEBE_WORKER_PROCESSES}\n  runtime_memory: ${ONEAPP_ONEBE_RUNTIME_MEMORY}\n  runtime_timeout: ${ONEAPP_ONEBE_RUNTIME_TIMEOUT}\n  runtime_cpu: ${ONEAPP_ONEBE_RUNTIME_CPU}\n  amqp_url: ${ONEAPP_AMQP_URL}\n  max_workers: ${ONEAPP_ONEBE_MAX_WORKERS}\n  min_workers: ${ONEAPP_ONEBE_MIN_WORKERS}\n  autoscale: ${ONEAPP_ONEBE_AUTOSCALE}" -e ":a; n; /# End Compute/ {p; b}; ba}; p" /etc/lithops/config
 
-            sed -i -ne "/# Start Monitoring/ {
-            p;
-            irabbitmq:\n  amqp_url: ${ONEAPP_AMQP_URL}
-            }" -e ":a; n; /# End Monitoring/ {p; b}; ba; p" /etc/lithops/config
+            sed -i -ne "/# Start Monitoring/ {p; irabbitmq:\n  amqp_url: ${ONEAPP_AMQP_URL}" -e ":a; n; /# End Monitoring/ {p; b}; ba}; p" /etc/lithops/config
         fi 
     fi
 
