@@ -27,7 +27,7 @@ opennebula_template:
     fallback_gw: '$FALLBACK_GW'
     network: 'YES'
     oneapp_lithops_backend: '$ONEAPP_LITHOPS_BACKEND'
-    oneapp_lithops_standalone: 'NO'
+    oneapp_lithops_standalone: '$ONEAPP_LITHOPS_STANDALONE'
     oneapp_lithops_storage: '$ONEAPP_LITHOPS_STORAGE'
     oneapp_minio_access_key_id: '$ONEAPP_MINIO_ACCESS_KEY_ID'
     oneapp_minio_bucket: '$ONEAPP_MINIO_BUCKET'
@@ -60,6 +60,7 @@ opennebula_template:
     arch: x86_64
   logo: images/logos/lithops.png
   user_inputs:
+    oneapp_lithops_standalone: "O|boolean|Appliance runs as standalone or as a service| |no"
     oneapp_lithops_backend: "O|text|Compute backend| |localhost"
     oneapp_lithops_storage: "O|text|Storage backend| |localhost"
     oneapp_minio_endpoint: "O|text|MinIO endpoint URL| |"
