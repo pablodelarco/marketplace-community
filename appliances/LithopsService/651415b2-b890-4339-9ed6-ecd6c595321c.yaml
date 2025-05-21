@@ -36,7 +36,7 @@ hypervisor: KVM
 opennebula_version: 6.8, 6.10
 type: 'SERVICE_TEMPLATE'
 roles:
-  vnf: 'Service Virtual Router'
+  vr: 'Lithops - Virtual Router'
   minio: 'Lithops - MinIO'
   lithops_client: 'Lithops - Client'
   lithops_worker: 'Lithops - Worker'
@@ -46,7 +46,7 @@ opennebula_template:
   deployment: straight
   description: ''
   roles:
-  - name: vnf
+  - name: vr
     cardinality: 1
     min_vms: 1
     vm_template_contents: |
@@ -58,8 +58,6 @@ opennebula_template:
         NAME = "NIC1",
         NETWORK_ID = "$Private"
       ]
-      ONEAPP_VNF_HAPROXY_INTERFACES = "$ONEAPP_VNF_HAPROXY_INTERFACES"
-      ONEAPP_VNF_HAPROXY_REFRESH_RATE = "$ONEAPP_VNF_HAPROXY_REFRESH_RATE"
       ONEAPP_VNF_DNS_ENABLED = "$ONEAPP_VNF_DNS_ENABLED"
       ONEAPP_VNF_DNS_INTERFACES = "$ONEAPP_VNF_DNS_INTERFACES"
       ONEAPP_VNF_DNS_NAMESERVERS = "$ONEAPP_VNF_DNS_NAMESERVERS"
@@ -72,7 +70,7 @@ opennebula_template:
     scheduled_policies: []
   - name: rabbitmq
     parents:
-    - vnf
+    - vr
     cardinality: 1
     min_vms: 1
     vm_template_contents: |
@@ -80,8 +78,8 @@ opennebula_template:
         NAME = "NIC0",
         NETWORK_ID = "$Private"
       ]
-      FALLBACK_GW = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
-      FALLBACK_DNS = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
+      FALLBACK_GW = "${vr.TEMPLATE.CONTEXT.ETH1_IP}"
+      FALLBACK_DNS = "${vr.TEMPLATE.CONTEXT.ETH1_IP}"
       ONEAPP_RABBITMQ_DEFAULT_USER = "$ONEAPP_RABBITMQ_DEFAULT_USER"
       ONEAPP_RABBITMQ_DEFAULT_PASS = "$ONEAPP_RABBITMQ_DEFAULT_PASS"
     cooldown: 120
@@ -89,7 +87,7 @@ opennebula_template:
     scheduled_policies: []
   - name: lithops_worker
     parents:
-    - vnf
+    - vr
     - rabbitmq
     cardinality: 1
     vm_template_contents: |
@@ -97,27 +95,26 @@ opennebula_template:
         NAME = "NIC0",
         NETWORK_ID = "$Private"
       ]
-      FALLBACK_GW = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
-      FALLBACK_DNS = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
+      FALLBACK_GW = "${vr.TEMPLATE.CONTEXT.ETH1_IP}"
+      FALLBACK_DNS = "${vr.TEMPLATE.CONTEXT.ETH1_IP}"
       ONEAPP_AMQP_USER = "$ONEAPP_RABBITMQ_DEFAULT_USER"
       ONEAPP_AMQP_PASS = "$ONEAPP_RABBITMQ_DEFAULT_PASS"
       ONEAPP_AMQP_HOST = "${rabbitmq.TEMPLATE.CONTEXT.ETH0_IP}"
       ONEAPP_AMQP_PORT = "5672"
-      ONEAPP_VNF_DNS_ENABLED = "$ONEAPP_VNF_DNS_ENABLED"
     cooldown: 120
     elasticity_policies: []
     scheduled_policies: []
   - name: minio
     parents:
-    - vnf
+    - vr
     cardinality: 1
     vm_template_contents: |
       NIC = [
         NAME = "NIC0",
         NETWORK_ID = "$Private"
       ]
-      FALLBACK_GW = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
-      FALLBACK_DNS = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
+      FALLBACK_GW = "${vr.TEMPLATE.CONTEXT.ETH1_IP}"
+      FALLBACK_DNS = "${vr.TEMPLATE.CONTEXT.ETH1_IP}"
       ONEAPP_MINIO_ROOT_USER="$ONEAPP_MINIO_ROOT_USER"
       ONEAPP_MINIO_ROOT_PASSWORD="$ONEAPP_MINIO_ROOT_PASSWORD"
       ONEAPP_MINIO_HOSTNAME="minio.opennebula.local"
@@ -125,9 +122,9 @@ opennebula_template:
     cooldown: 120
     elasticity_policies: []
     scheduled_policies: []
-  - name: lithops
+  - name: lithops_client
     parents:
-    - vnf
+    - vr
     - rabbitmq
     - minio
     - lithops_worker
@@ -137,8 +134,8 @@ opennebula_template:
         NAME = "NIC0",
         NETWORK_ID = "$Private"
       ]
-      FALLBACK_GW = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
-      FALLBACK_DNS = "${vnf.TEMPLATE.CONTEXT.ETH1_IP}"
+      FALLBACK_GW = "${vr.TEMPLATE.CONTEXT.ETH1_IP}"
+      FALLBACK_DNS = "${vr.TEMPLATE.CONTEXT.ETH1_IP}"
       ONEAPP_LITHOPS_BACKEND="amqp"
       ONEAPP_LITHOPS_STORAGE="minio"
       ONEAPP_MINIO_ENDPOINT="http://${minio.TEMPLATE.CONTEXT.ETH0_IP}:9000"
@@ -162,10 +159,6 @@ opennebula_template:
     Public: 'M|network|Public| |id::'
     Private: 'M|network|Private| |id::'
   custom_attrs:
-    ONEAPP_STORAGE_DEVICE: '0|text|Storage device path||/dev/vdb'
-    ONEAPP_STORAGE_FILESYSTEM: '0|text|Storage device filesystem||xfs'
-    ONEAPP_VNF_HAPROXY_INTERFACES: '0|text|Interfaces to run Haproxy on||eth0'
-    ONEAPP_VNF_HAPROXY_REFRESH_RATE: '0|number|Haproxy refresh rate||30'
     ONEAPP_VNF_DNS_ENABLED: '0|boolean|Enable DNS recursor||YES'
     ONEAPP_VNF_DNS_INTERFACES: '0|text|DNS - Interfaces||eth1'
     ONEAPP_VNF_DNS_NAMESERVERS: '0|text|DNS - Nameservers||1.1.1.1,8.8.8.8'
@@ -175,11 +168,8 @@ opennebula_template:
     ONEAPP_VNF_ROUTER4_INTERFACES: '0|text|Router - Interfaces||eth0,eth1'
     ONEAPP_MINIO_ROOT_USER: 'M|text|MinIO Root User||minioadmin'
     ONEAPP_MINIO_ROOT_PASSWORD: 'M|password|MinIO Root User Password||'
-    ONEAPP_ONEBE_DOCKER_USER: 'M|text|Docker user for Lithops||'
-    ONEAPP_ONEBE_DOCKER_PASSWORD: 'M|password|Docker user password for Lithops||'
-    ONEAPP_ONEBE_JUPYTER_PASSWORD: 'M|password|Password for Jupyter access||'
     ONEAPP_ONEBE_AUTOSCALE: '0|text|Lithops backend autoscale option||all'
-    ONEAPP_RABBITMQ_DEFAULT_USER: 'M|text|RabbitMQ User||oneadmin'
+    ONEAPP_RABBITMQ_DEFAULT_USER: 'M|text|RabbitMQ User||rabbitmqadmin'
     ONEAPP_RABBITMQ_DEFAULT_PASS: 'M|password|RabbitMQ User Password||'
   ready_status_gate: true
 logo: lithops.png
