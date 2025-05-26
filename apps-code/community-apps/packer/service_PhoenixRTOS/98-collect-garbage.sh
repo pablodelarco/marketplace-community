@@ -3,7 +3,7 @@
 # Clean APT caches, remove temporary/unneeded files/logs/packages.
 
 exec 1>&2
-set -eux -o pipefail
+set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
