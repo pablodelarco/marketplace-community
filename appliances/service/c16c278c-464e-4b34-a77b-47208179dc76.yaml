@@ -21,6 +21,7 @@ opennebula_version: 6.8, 6.10
 opennebula_template:
   context:
     network: 'YES'
+    report_ready: 'YES'
     oneapp_rabbitmq_user: "$ONEAPP_RABBITMQ_USER"
     oneapp_rabbitmq_pass: "$ONEAPP_RABBITMQ_PASS"
     oneapp_rabbitmq_loopback_user: "$ONEAPP_RABBITMQ_LOOPBACK_USER"
