@@ -22,6 +22,7 @@ opennebula_version: 6.8, 6.10
 opennebula_template:
   context:
     network: 'YES'
+    report_ready: 'YES'
     oneapp_amqp_user: '$ONEAPP_AMQP_USER'
     oneapp_amqp_pass: '$ONEAPP_AMQP_PASS'
     oneapp_amqp_host: '$ONEAPP_AMQP_HOST'

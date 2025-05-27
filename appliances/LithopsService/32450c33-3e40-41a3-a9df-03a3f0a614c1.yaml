@@ -24,6 +24,7 @@ opennebula_template:
     fallback_gw: "$FALLBACK_GW"
     fallback_dns: "$FALLBACK_DNS"
     network: 'YES'
+    report_ready: 'YES'
     oneapp_minio_hostname: "$ONEAPP_MINIO_HOSTNAME"
     oneapp_minio_multi: 'YES'
     oneapp_minio_opts: "$ONEAPP_MINIO_OPTS"

@@ -26,6 +26,7 @@ opennebula_template:
     fallback_dns: '$FALLBACK_DNS'
     fallback_gw: '$FALLBACK_GW'
     network: 'YES'
+    report_ready: 'YES'
     oneapp_lithops_backend: '$ONEAPP_LITHOPS_BACKEND'
     oneapp_lithops_standalone: '$ONEAPP_LITHOPS_STANDALONE'
     oneapp_lithops_storage: '$ONEAPP_LITHOPS_STORAGE'
