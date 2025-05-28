@@ -298,9 +298,9 @@ EOF
 update_lithops_config(){
     msg info "Update compute and storage backend modes"
     if [[ "$ONEAPP_LITHOPS_BACKEND" == "one" || "$ONEAPP_LITHOPS_BACKEND" == "amqp" ]]; then
-        sed -i 's/^backend: .*/backend: one/' /etc/lithops/config
+        sed -i 's/backend: .*/backend: one/' /etc/lithops/config
     else
-        sed -i "s/^backend: .*/backend: ${ONEAPP_LITHOPS_BACKEND}/" /etc/lithops/config
+        sed -i "s/backend: .*/backend: ${ONEAPP_LITHOPS_BACKEND}/" /etc/lithops/config
     fi
     sed -i "s/storage: .*/storage: ${ONEAPP_LITHOPS_STORAGE}/g" /etc/lithops/config
 

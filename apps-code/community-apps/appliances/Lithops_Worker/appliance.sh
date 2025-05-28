@@ -87,7 +87,6 @@ service_install()
 service_configure()
 {
     setup_service
-    mount_onegate
     return 0
 }
 
@@ -114,11 +113,6 @@ install_system_dependencies() {
         git \
         zip && \
     rm -rf /var/lib/apt/lists/*
-}
-
-mount_onegate() {
-    mkdir -p /mnt/context
-    mount /dev/cdrom /mnt/context
 }
 
 clone_lithops_repository() {
