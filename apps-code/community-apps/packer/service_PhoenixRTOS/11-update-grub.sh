@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Set kernel command line (net.ifnames=0 is particularly important),
+# Set kernel command line (net.ifnames=0 is particularily important),
 # then update initramfs/initrd and grub2.
 
 exec 1>&2
