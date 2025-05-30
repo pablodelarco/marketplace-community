@@ -26,8 +26,8 @@ variable "ubuntu" {
 
   default = {
     "phoenix" = {
-      iso_url      = "https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img"
-      iso_checksum = "file:https://cloud-images.ubuntu.com/focal/current/SHA256SUMS"
+      iso_url      = "https://cloud-images.ubuntu.com/focal/current/jammy-server-cloudimg-amd64.img"
+      iso_checksum = "file:https://cloud-images.ubuntu.com/focal/current/jammy-SHA256SUMS"
     }
 
     "2004min" = {

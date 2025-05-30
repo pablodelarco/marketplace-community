@@ -1,6 +1,6 @@
 id: phoenixrtos
 name: Phoenix-RTOS
-version: "1"
+version: "0.1.0"
 short_description: |
   Phoenix-RTOS appliance running inside a qcow2 image,
   auto-installs Docker and launches phoenix-rtos-one container.
