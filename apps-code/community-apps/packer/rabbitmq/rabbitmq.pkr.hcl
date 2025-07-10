@@ -98,7 +98,7 @@ build {
   }
   # Pull your own custom logic here. Must be called appliance.sh if using bash tools
   provisioner "file" {
-    sources     = ["appliances/rabbitmq/appliance.sh"]
+    sources     = ["../../appliances/rabbitmq/appliance.sh"]
     destination = "/etc/one-appliance/service.d/"
   }
 
