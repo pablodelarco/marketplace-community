@@ -59,19 +59,3 @@ opennebula_template:
 # Logo to display in the web interface. You can check the available logos in
 # "logos" dir in this repository. You can also submit a new logo
 logo: debian.png
-
-# Array with all images related to this app
-# OpenNebula's team will build and upload the images after appliance approval,
-# there is no need to edit this section.
-images:
-- name: Debian-8.4
-  url: https://s3-eu-west-1.amazonaws.com/opennebula-marketplace/debian8-5.0.1-fix.qcow2c
-  type: OS
-  dev_prefix: vd
-  driver: qcow2
-  # Size in bytes of the image, not the file. You can use `qemu-img info` command
-  # to retrieve the virtual size.
-  size: 2147483648
-  checksum:
-    md5: a661b9101d0e7427a9495967292f7285
-    sha256: 3f84c3e90b488c476d516d40863c69b534079843851b2b3b2476a29484a275a9
