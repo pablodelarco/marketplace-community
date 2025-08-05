@@ -1,0 +1,43 @@
+---
+:app:
+  :name: phoenixrtos
+  :type: service
+  :os:
+    :type: linux
+    :base: ubuntu2404
+  :hypervisor: KVM
+  :context:
+    :prefixed: true
+    :params:
+      :PHOENIX_CONTAINER_NAME: 'phoenix-rtos-dev'
+      :PHOENIX_AUTO_START: 'YES'
+      :PHOENIX_WORK_DIR: '/opt/phoenix-rtos'
+      :PHOENIX_EXPOSE_PORTS: '22,80,443'
+      :PHOENIX_MEMORY_LIMIT: ''
+      :PHOENIX_CPU_LIMIT: ''
+
+:one:
+  :template:
+    NAME: base
+    TEMPLATE:
+      ARCH: x86_64
+      CONTEXT:
+        NETWORK: 'YES'
+        SSH_PUBLIC_KEY: "$USER[SSH_PUBLIC_KEY]"
+      CPU: '2'
+      CPU_MODEL:
+        MODEL: host-passthrough
+      GRAPHICS:
+        LISTEN: 0.0.0.0
+        TYPE: vnc
+      MEMORY: '2048'
+      NIC:
+        NETWORK: service
+      NIC_DEFAULT:
+        MODEL: virtio
+  :datastore_name: default
+  :timeout: '120'
+
+:infra:
+  :disk_format: qcow2
+  :apps_path: /var/tmp

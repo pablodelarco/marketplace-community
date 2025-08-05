@@ -1,0 +1,99 @@
+---
+name: Phoenix RTOS Development Environment
+version: 1.0.0
+one-apps_version: 6.10.0-3
+publisher: OpenNebula Community
+publisher_email: community@opennebula.io
+description: |-
+  Phoenix RTOS Development Environment Appliance
+
+  This appliance provides a complete Phoenix RTOS development environment based on Ubuntu 24.04 LTS
+  with Docker pre-installed and the Phoenix RTOS container image pre-loaded for immediate use.
+
+  **Features:**
+  - Ubuntu 24.04 LTS base system
+  - Docker CE with Phoenix RTOS container pre-loaded
+  - Development tools and utilities
+  - Ready-to-use Phoenix RTOS development environment
+  - Configurable container parameters
+  - Helper scripts for easy container management
+
+  **Pre-loaded Container:**
+  - Image: `pablodelarco/phoenix-rtos-one:latest`
+  - Pre-pulled during image creation for fast startup
+  - Offline availability
+
+  **Usage:**
+  - Access Phoenix RTOS environment via Docker commands
+  - Use helper script: `phoenix-rtos {start|stop|shell|logs}`
+  - Configure container through OpenNebula context variables
+
+  **Configuration Parameters:**
+  - ONEAPP_PHOENIX_CONTAINER_NAME: Container name (default: phoenix-rtos-dev)
+  - ONEAPP_PHOENIX_AUTO_START: Auto-start on boot (default: YES)
+  - ONEAPP_PHOENIX_WORK_DIR: Working directory (default: /opt/phoenix-rtos)
+  - ONEAPP_PHOENIX_EXPOSE_PORTS: Ports to expose (default: 22,80,443)
+  - ONEAPP_PHOENIX_MEMORY_LIMIT: Memory limit (e.g., 1g)
+  - ONEAPP_PHOENIX_CPU_LIMIT: CPU limit (e.g., 1.5)
+
+  For more information about Phoenix RTOS, visit: https://phoenix-rtos.org/
+
+short_description: Phoenix RTOS development environment with pre-loaded Docker container
+
+tags:
+- phoenix-rtos
+- ubuntu
+- docker
+- development
+- embedded
+- rtos
+
+format: qcow2
+creation_time: 1704067200
+os-id: Ubuntu
+os-release: 24.04 LTS
+os-arch: x86_64
+hypervisor: KVM
+opennebula_version: 6.10, 7.0
+
+opennebula_template:
+  context:
+    network: 'YES'
+    oneapp_phoenix_container_name: "$ONEAPP_PHOENIX_CONTAINER_NAME"
+    oneapp_phoenix_auto_start: "$ONEAPP_PHOENIX_AUTO_START"
+    oneapp_phoenix_work_dir: "$ONEAPP_PHOENIX_WORK_DIR"
+    oneapp_phoenix_expose_ports: "$ONEAPP_PHOENIX_EXPOSE_PORTS"
+    oneapp_phoenix_memory_limit: "$ONEAPP_PHOENIX_MEMORY_LIMIT"
+    oneapp_phoenix_cpu_limit: "$ONEAPP_PHOENIX_CPU_LIMIT"
+    ssh_public_key: "$USER[SSH_PUBLIC_KEY]"
+  cpu: '2'
+  graphics:
+    listen: 0.0.0.0
+    type: vnc
+  inputs_order: >-
+    ONEAPP_PHOENIX_CONTAINER_NAME, ONEAPP_PHOENIX_AUTO_START, ONEAPP_PHOENIX_WORK_DIR, 
+    ONEAPP_PHOENIX_EXPOSE_PORTS, ONEAPP_PHOENIX_MEMORY_LIMIT, ONEAPP_PHOENIX_CPU_LIMIT
+  memory: '2048'
+  os:
+    arch: x86_64
+  user_inputs:
+    oneapp_phoenix_container_name: O|text|Container name|^[a-zA-Z0-9][a-zA-Z0-9_.-]*$|phoenix-rtos-dev
+    oneapp_phoenix_auto_start: O|list|Auto-start container on boot| |YES,NO
+    oneapp_phoenix_work_dir: O|text|Phoenix RTOS working directory| |/opt/phoenix-rtos
+    oneapp_phoenix_expose_ports: O|text|Ports to expose (comma-separated)| |22,80,443
+    oneapp_phoenix_memory_limit: O|text|Container memory limit (e.g., 1g, 512m)| |
+    oneapp_phoenix_cpu_limit: O|text|Container CPU limit (e.g., 1.5, 2)| |
+
+logo: phoenixrtos.png
+
+images:
+- name: phoenixrtos
+  url: >-
+    https://marketplace.opennebula.io/appliance/phoenixrtos-1.0.0.qcow2
+  type: OS
+  dev_prefix: vd
+  driver: qcow2
+  size: 8589934592
+  checksum:
+    md5: placeholder_md5_checksum
+    sha256: placeholder_sha256_checksum

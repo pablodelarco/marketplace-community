@@ -1,6 +1,6 @@
 variable "appliance_name" {
   type    = string
-  default = "service_PhoenixRTOS"
+  default = "phoenixrtos"
 }
 
 variable "version" {
@@ -21,13 +21,18 @@ variable "headless" {
   default = false
 }
 
+variable "arch" {
+  type    = string
+  default = "amd64"
+}
+
 variable "ubuntu" {
   type = map(map(string))
 
   default = {
     "phoenix" = {
-      iso_url      = "https://cloud-images.ubuntu.com/focal/current/jammy-server-cloudimg-amd64.img"
-      iso_checksum = "file:https://cloud-images.ubuntu.com/focal/current/jammy-SHA256SUMS"
+      iso_url      = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+      iso_checksum = "file:https://cloud-images.ubuntu.com/noble/current/SHA256SUMS"
     }
 
     "2004min" = {
@@ -37,6 +42,10 @@ variable "ubuntu" {
     "2204" = {
       iso_url      = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
       iso_checksum = "file:https://cloud-images.ubuntu.com/jammy/current/SHA256SUMS"
+    }
+    "2404" = {
+      iso_url      = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+      iso_checksum = "file:https://cloud-images.ubuntu.com/noble/current/SHA256SUMS"
     }
     "2204.aarch64" = {
       iso_url      = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-arm64.img"
