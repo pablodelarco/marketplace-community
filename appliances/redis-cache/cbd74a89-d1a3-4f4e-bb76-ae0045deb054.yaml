@@ -1,0 +1,62 @@
+name: Redis
+version: 1.0.0-1
+publisher: OpenNebula Community
+description: |-
+  Redis running in Docker on Ubuntu 22.04 LTS. This appliance provides
+  a complete Redis environment with Docker pre-installed and configured.
+
+  ## Features
+  - Ubuntu 22.04 LTS base system
+  - Docker Engine CE pre-installed
+  - Redis container ready to run
+  - Configurable port mappings (default: 6379:6379)
+  - Volume mounting support
+  - Environment variable configuration
+  - Custom command execution support
+  - Docker registry authentication support
+
+  ## Access
+  - SSH access with your public key
+  - VNC console access available
+  - Application accessible via configured ports
+
+short_description: Redis running in Docker container on Ubuntu 22.04 LTS
+tags:
+- docker
+- container
+- ubuntu
+- redis
+format: qcow2
+creation_time: 1758188724
+os-id: Ubuntu
+os-release: '22.04'
+os-arch: x86_64
+hypervisor: KVM
+opennebula_version: 6.10, 7.0
+opennebula_template:
+  context:
+    network: 'YES'
+    oneapp_docker_ports: "$ONEAPP_DOCKER_PORTS"
+    oneapp_docker_volumes: "$ONEAPP_DOCKER_VOLUMES"
+    oneapp_docker_env_vars: "$ONEAPP_DOCKER_ENV_VARS"
+    oneapp_docker_command: "$ONEAPP_DOCKER_COMMAND"
+    oneapp_docker_registry_url: "$ONEAPP_DOCKER_REGISTRY_URL"
+    oneapp_docker_registry_user: "$ONEAPP_DOCKER_REGISTRY_USER"
+    oneapp_docker_registry_password: "$ONEAPP_DOCKER_REGISTRY_PASSWORD"
+    ssh_public_key: "$USER[SSH_PUBLIC_KEY]"
+  cpu: '2'
+  memory: '2048'
+  graphics:
+    listen: '0.0.0.0'
+    type: 'vnc'
+  hypervisor: 'kvm'
+  sched_requirements: 'HYPERVISOR=kvm'
+  user_inputs:
+    oneapp_docker_ports: O|text|Port mappings for Docker container (e.g., 8080:8080)| |6379:6379
+    oneapp_docker_volumes: O|text|Volume mappings for Docker container (e.g., /host/path:/container/path)| |
+    oneapp_docker_env_vars: O|text|Environment variables for Docker container (e.g., VAR1=value1,VAR2=value2)| |
+    oneapp_docker_command: O|text|Custom command to run in Docker container| |
+    oneapp_docker_registry_url: O|text|Custom Docker registry URL (optional)| |
+    oneapp_docker_registry_user: O|text|Docker registry username (optional)| |
+    oneapp_docker_registry_password: O|password|Docker registry password (optional)| |
+  inputs_order: oneapp_docker_ports,oneapp_docker_volumes,oneapp_docker_env_vars,oneapp_docker_command,oneapp_docker_registry_url,oneapp_docker_registry_user,oneapp_docker_registry_password

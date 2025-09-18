@@ -1,0 +1,10 @@
+---
+- name: basic
+  description: Basic functionality test
+  deployment:
+    vm_template: basic
+  tests:
+    - test_ssh_connection
+    - test_docker_service
+    - test_container_running
+    - test_port_accessibility

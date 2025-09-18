@@ -1,0 +1,7 @@
+---
+vm_templates:
+  basic:
+    cpu: 2
+    memory: 2048
+    context:
+      oneapp_docker_ports: "6379:6379"
