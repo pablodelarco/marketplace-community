@@ -212,3 +212,7 @@ The srsRAN Project appliance is based on Ubuntu 24.04 LTS (for x86-64).
   - Configuration status reporting
 
 This appliance provides a complete solution for deploying srsRAN Project in OpenNebula environments, with extensive optimizations for performance, reliability, and ease of management.
+
+# Acknowledgements
+
+Some of the software features included in this repository have been made possible through the funding of the following innovation project: [ONEedge5G](https://opennebula.io/innovation/oneedge5g/).
