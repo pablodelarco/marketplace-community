@@ -116,90 +116,238 @@ images:
 
 ## 🔧 Step 3: Create appliance.sh
 
-This is the main installation script that runs during VM image build.
+This is the main installation script. Use the **exact structure** from Phoenix RTOS/Node-RED appliances.
 
 ```bash
 nano appliance.sh
 ```
 
-**Template structure:**
+**Template (based on Phoenix RTOS/Node-RED structure):**
 
 ```bash
 #!/usr/bin/env bash
+
+# MyApp Appliance Installation Script
+# Docker Image: your-docker-image:tag
+
 set -o errexit -o pipefail
 
-# Logging function
-msg() {
-    local level="$1"
-    shift
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$level] $*" >&2
-}
-
-# OpenNebula context parameters
+# List of contextualization parameters
 ONE_SERVICE_PARAMS=(
-    'ONEAPP_CONTAINER_NAME'     'configure'  'Docker container name'
-    'ONEAPP_CONTAINER_PORTS'    'configure'  'Port mappings'
-    'ONEAPP_CONTAINER_ENV'      'configure'  'Environment variables'
-    'ONEAPP_CONTAINER_VOLUMES'  'configure'  'Volume mappings'
+    'ONEAPP_CONTAINER_NAME'     'configure'  'Docker container name'                    'O|text'
+    'ONEAPP_CONTAINER_PORTS'    'configure'  'Docker container port mappings'           'O|text'
+    'ONEAPP_CONTAINER_ENV'      'configure'  'Docker container environment variables'   'O|text'
+    'ONEAPP_CONTAINER_VOLUMES'  'configure'  'Docker container volume mappings'         'O|text'
 )
 
-# Configuration - CUSTOMIZE THESE
+# Configuration from user input - CUSTOMIZE THESE
 DOCKER_IMAGE="your-docker-image:tag"
 DEFAULT_CONTAINER_NAME="myapp-container"
 DEFAULT_PORTS="8080:8080"
+DEFAULT_ENV_VARS=""
+DEFAULT_VOLUMES="/data:/data"
+APP_NAME="MyApp"
+APPLIANCE_NAME="myapp"
 
-# service_install - Install Docker and pull image
-service_install() {
-    msg info "Installing MyApp service"
-    
-    # Install Docker
-    apt-get update
-    apt-get install -y docker.io
-    systemctl enable docker
-    systemctl start docker
-    
-    # Pull Docker image
-    docker pull "${DOCKER_IMAGE}"
-    
-    # Set root password
-    echo "root:opennebula" | chpasswd
-    
-    # Enable SSH password authentication
-    sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+### Appliance metadata ###############################################
+
+ONE_SERVICE_NAME='MyApp'
+ONE_SERVICE_VERSION=   #latest
+ONE_SERVICE_BUILD=$(date +%s)
+ONE_SERVICE_SHORT_DESCRIPTION='MyApp Docker Container Appliance'
+ONE_SERVICE_DESCRIPTION='MyApp running in Docker container'
+ONE_SERVICE_RECONFIGURABLE=true
+
+### Appliance functions ##############################################
+
+service_cleanup()
+{
+    :
 }
 
-# service_configure - Verify Docker is running
-service_configure() {
-    msg info "Configuring MyApp service"
-    systemctl is-active --quiet docker || return 1
+service_install()
+{
+    export DEBIAN_FRONTEND=noninteractive
+
+# Update system
+apt-get update
+apt-get upgrade -y
+
+# Install Docker
+apt-get install -y ca-certificates curl
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Enable and start Docker
+systemctl enable docker
+systemctl start docker
+
+# Pre-create the data directory
+mkdir -p /data
+chown 1000:1000 /data
+
+# Pull Docker image during installation
+msg info "Pulling ${APP_NAME} Docker image"
+docker pull $DOCKER_IMAGE
+
+# Verify the image was pulled
+msg info "Verifying ${APP_NAME} image was pulled:"
+docker images $DOCKER_IMAGE
+
+# Configure console auto-login
+systemctl stop unattended-upgrades 2>/dev/null || true
+systemctl disable unattended-upgrades 2>/dev/null || true
+apt-get install -y mingetty
+mkdir -p /etc/systemd/system/getty@tty1.service.d
+cat > /etc/systemd/system/getty@tty1.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --noissue --autologin root %I $TERM
+Type=idle
+EOF
+
+# Configure serial console and set root password
+mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
+cat > /etc/systemd/system/serial-getty@ttyS0.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --noissue --autologin root %I 115200,38400,9600 vt102
+Type=idle
+EOF
+echo 'root:opennebula' | chpasswd
+systemctl enable getty@tty1.service serial-getty@ttyS0.service
+
+# Create welcome message
+cat > /etc/profile.d/99-myapp-welcome.sh << 'EOF'
+#!/bin/bash
+case $- in *i*) ;; *) return;; esac
+echo "=================================================="
+echo "  MyApp Appliance - Container: myapp-container"
+echo "  Commands: docker ps | docker logs myapp-container"
+echo "=================================================="
+EOF
+chmod +x /etc/profile.d/99-myapp-welcome.sh
+
+# Clean up
+apt-get autoremove -y
+apt-get autoclean
+find /var/log -type f -exec truncate -s 0 {} \;
+
+sync
 }
 
-# service_bootstrap - Start the container
-service_bootstrap() {
-    msg info "Starting MyApp container"
-    
-    local container_name="${ONEAPP_CONTAINER_NAME:-${DEFAULT_CONTAINER_NAME}}"
-    local ports="${ONEAPP_CONTAINER_PORTS:-${DEFAULT_PORTS}}"
-    
-    # Build docker run command
-    local docker_cmd="docker run -d --name ${container_name} --restart unless-stopped"
-    
-    # Add ports
-    IFS=',' read -ra PORT_ARRAY <<< "${ports}"
-    for port in "${PORT_ARRAY[@]}"; do
-        docker_cmd="${docker_cmd} -p ${port}"
-    done
-    
-    # Add image and start
-    docker_cmd="${docker_cmd} ${DOCKER_IMAGE}"
-    eval "${docker_cmd}"
+service_configure()
+{
+    msg info "Starting ${APP_NAME} service configuration"
+
+    # Ensure Docker is running
+    if ! systemctl is-active --quiet docker; then
+        msg info "Starting Docker service..."
+        systemctl enable docker
+        systemctl start docker
+        sleep 3
+    fi
+
+    # Verify Docker is working
+    if docker info >/dev/null 2>&1; then
+        msg info "✓ Docker is running and accessible"
+    else
+        msg error "✗ Docker is not working properly"
+        return 1
+    fi
+
+    msg info "${APP_NAME} configuration completed"
+    return 0
+}
+
+service_bootstrap()
+{
+    msg info "Starting ${APP_NAME} service bootstrap"
+
+    # Ensure Docker is running
+    if ! systemctl is-active --quiet docker; then
+        msg info "Starting Docker service..."
+        systemctl start docker
+        sleep 3
+    fi
+
+    # Setup container
+    msg info "Setting up ${APP_NAME} container"
+    setup_myapp_container
+
+    msg info "${APP_NAME} bootstrap completed"
+    return 0
+}
+
+# Container setup function
+setup_myapp_container()
+{
+    local container_name="${DEFAULT_CONTAINER_NAME}"
+    local image_name="${DOCKER_IMAGE}"
+
+    msg info "Setting up ${APP_NAME} container: $container_name"
+
+    # Stop and remove any existing container
+    if docker ps -a --filter "name=$container_name" --format "table {{.Names}}" | grep -q "$container_name"; then
+        msg info "Stopping and removing existing ${APP_NAME} container"
+        docker stop "$container_name" 2>/dev/null || true
+        docker rm "$container_name" 2>/dev/null || true
+        sleep 2
+    fi
+
+    # Create data directory
+    mkdir -p /data
+
+    # Start container
+    msg info "Starting ${APP_NAME} container"
+    if docker run -d \
+        --name "$container_name" \
+        --restart unless-stopped \
+        -p 8080:8080 \
+        -v /data:/data \
+        --label oneapp.managed=true \
+        --label oneapp.service=${APPLIANCE_NAME} \
+        "$image_name"; then
+
+        msg info "✓ ${APP_NAME} container created and started successfully"
+
+        # Wait and verify container is running
+        sleep 5
+        if docker ps --filter "name=$container_name" --format "table {{.Names}}" | grep -q "$container_name"; then
+            msg info "✓ ${APP_NAME} container is running"
+
+            # Show container status
+            local status=$(docker ps --filter "name=$container_name" --format "{{.Status}}")
+            msg info "  Status: $status"
+        else
+            msg error "✗ ${APP_NAME} container stopped unexpectedly"
+            msg info "Container logs:"
+            docker logs "$container_name" 2>&1 | tail -10 | while read line; do
+                msg info "  $line"
+            done
+            return 1
+        fi
+    else
+        msg error "✗ Failed to start ${APP_NAME} container"
+        return 1
+    fi
 }
 ```
 
-**Customize**:
-- `DOCKER_IMAGE`: Your Docker image
-- `DEFAULT_*` variables: Default configuration
-- Add custom logic in `service_install()` if needed
+**Key points (matching Phoenix RTOS/Node-RED):**
+- Uses `msg info/error/warn` for logging (provided by OpenNebula framework)
+- No systemd service - direct container startup in `service_bootstrap()`
+- Console auto-login with getty configuration
+- Root password set to 'opennebula'
+- Welcome message in `/etc/profile.d/`
+- Separate `setup_myapp_container()` function
+- Uses `--restart unless-stopped` for container
 
 ---
 
