@@ -20,7 +20,7 @@ make myapp
 
 ## 📚 Complete Guide
 
-**👉 See [QUICK_START_GUIDE.md](../QUICK_START_GUIDE.md) for the complete step-by-step tutorial**
+**👉 See [README.md](README.md) for the complete step-by-step tutorial**
 
 The guide covers:
 - ✅ **Setup** - Clone repository and prepare environment
@@ -69,7 +69,7 @@ WEB_INTERFACE="true"
 
 ## 🚀 Ready to Start?
 
-**👉 Follow the complete guide: [QUICK_START_GUIDE.md](../QUICK_START_GUIDE.md)**
+**👉 Follow the complete guide: [README.md](README.md)**
 
 **Time needed**: 15-30 minutes total
 **Result**: Production-ready OpenNebula appliance
