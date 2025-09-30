@@ -63,224 +63,172 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 systemctl enable docker
 systemctl start docker
 
-# Pull the user's Docker image
-echo "Pulling Docker image: $DOCKER_IMAGE"
-docker pull "$DOCKER_IMAGE"
+# Pre-create the data directory
+mkdir -p /data
+chown 1000:1000 /data
 
-    # Create container startup script
-    cat > /usr/local/bin/start-nodered-container.sh << 'CONTAINER_SCRIPT'
-#!/bin/bash
+# Pull Node-RED image during installation
+msg info "Pulling Node-RED Docker image"
+docker pull $DOCKER_IMAGE
 
-# Load OpenNebula context variables if available
-if [ -f /var/lib/one-context/one_env ]; then
-    source /var/lib/one-context/one_env
-fi
+# Verify the image was pulled
+msg info "Verifying Node-RED image was pulled:"
+docker images nodered/node-red
 
-# Use context variables or defaults
-CONTAINER_NAME="${CONTAINER_NAME:-nodered-app}"
-CONTAINER_PORTS="${CONTAINER_PORTS:-1880:1880}"
-CONTAINER_ENV="${CONTAINER_ENV:-}"
-CONTAINER_VOLUMES="${CONTAINER_VOLUMES:-/data:/data}"
-
-# Parse port mappings
-parse_ports() {
-    local ports="$1"
-    local port_args=""
-    if [ -n "$ports" ]; then
-        IFS=',' read -ra PORT_ARRAY <<< "$ports"
-        for port in "${PORT_ARRAY[@]}"; do
-            port_args="$port_args -p $port"
-        done
-    fi
-    echo "$port_args"
-}
-
-# Parse environment variables
-parse_env() {
-    local env_vars="$1"
-    local env_args=""
-    if [ -n "$env_vars" ]; then
-        IFS=',' read -ra ENV_ARRAY <<< "$env_vars"
-        for env in "${ENV_ARRAY[@]}"; do
-            env_args="$env_args -e $env"
-        done
-    fi
-    echo "$env_args"
-}
-
-# Parse volume mounts
-parse_volumes() {
-    local volumes="$1"
-    local volume_args=""
-    if [ -n "$volumes" ]; then
-        IFS=',' read -ra VOL_ARRAY <<< "$volumes"
-        for vol in "${VOL_ARRAY[@]}"; do
-            host_path=$(echo "$vol" | cut -d':' -f1)
-            mkdir -p "$host_path"
-            volume_args="$volume_args -v $vol"
-        done
-    fi
-    echo "$volume_args"
-}
-
-# Stop existing container if running
-if docker ps -q -f name="$CONTAINER_NAME" | grep -q .; then
-    echo "Stopping existing container: $CONTAINER_NAME"
-    docker stop "$CONTAINER_NAME"
-    docker rm "$CONTAINER_NAME"
-fi
-
-# Build docker run command
-PORT_ARGS=$(parse_ports "$CONTAINER_PORTS")
-ENV_ARGS=$(parse_env "$CONTAINER_ENV")
-VOLUME_ARGS=$(parse_volumes "$CONTAINER_VOLUMES")
-
-echo "Starting $CONTAINER_NAME container..."
-docker run -d \
-    --name "$CONTAINER_NAME" \
-    --restart unless-stopped \
-    $PORT_ARGS \
-    $ENV_ARGS \
-    $VOLUME_ARGS \
-    "nodered/node-red:latest"
-
-if [ $? -eq 0 ]; then
-    echo "✓ $CONTAINER_NAME started successfully"
-    docker ps --filter name="$CONTAINER_NAME"
-else
-    echo "✗ Failed to start $CONTAINER_NAME"
-    exit 1
-fi
-CONTAINER_SCRIPT
-
-    chmod +x /usr/local/bin/start-nodered-container.sh
-
-    # Create systemd service for the container
-    cat > /etc/systemd/system/nodered-container.service << 'SERVICE_EOF'
-[Unit]
-Description=Node-Red Container Service
-After=docker.service
-Requires=docker.service
-After=one-context.service
-Wants=one-context.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/local/bin/start-nodered-container.sh
-ExecStop=/usr/bin/docker stop nodered-app
-ExecStopPost=/usr/bin/docker rm nodered-app
-TimeoutStartSec=300
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-SERVICE_EOF
-
-    systemctl enable nodered-container.service
-
-    # Configure console access (lightweight alternative to VNC)
-    # Stop unattended-upgrades to avoid package lock conflicts
-    systemctl stop unattended-upgrades
-    systemctl disable unattended-upgrades
-
-    # Wait for any existing package operations to complete
-    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
-        echo "Waiting for other package managers to finish..."
-        sleep 5
-    done
-
-    # Install minimal packages for console access
-    apt-get install -y mingetty
-
-    # Configure auto-login on console
-    mkdir -p /etc/systemd/system/getty@tty1.service.d
-    cat > /etc/systemd/system/getty@tty1.service.d/override.conf << 'CONSOLE_EOF'
+# Configure console auto-login
+systemctl stop unattended-upgrades 2>/dev/null || true
+systemctl disable unattended-upgrades 2>/dev/null || true
+apt-get install -y mingetty
+mkdir -p /etc/systemd/system/getty@tty1.service.d
+cat > /etc/systemd/system/getty@tty1.service.d/override.conf << 'EOF'
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --noissue --autologin root %I $TERM
 Type=idle
-CONSOLE_EOF
+EOF
 
-    # Configure auto-login on serial console as well
-    mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
-    cat > /etc/systemd/system/serial-getty@ttyS0.service.d/override.conf << 'SERIAL_EOF'
+# Configure serial console and set root password
+mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
+cat > /etc/systemd/system/serial-getty@ttyS0.service.d/override.conf << 'EOF'
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --noissue --autologin root %I 115200,38400,9600 vt102
 Type=idle
-SERIAL_EOF
+EOF
+echo 'root:opennebula' | chpasswd
+systemctl enable getty@tty1.service serial-getty@ttyS0.service
 
-    # Set root password for SSH access
-    echo 'root:opennebula' | chpasswd
-
-    # Enable console services
-    systemctl enable getty@tty1.service
-    systemctl enable serial-getty@ttyS0.service
-
-    # Create welcome message
-    cat > /etc/profile.d/99-nodered-welcome.sh << 'WELCOME_EOF'
+# Create welcome message
+cat > /etc/profile.d/99-nodered-welcome.sh << 'EOF'
 #!/bin/bash
-case $- in
-    *i*) ;;
-      *) return;;
-esac
-
+case $- in *i*) ;; *) return;; esac
 echo "=================================================="
-echo "  Node-Red Appliance"
+echo "  Node-RED Appliance - Container: nodered-app"
+echo "  Commands: docker ps | docker logs nodered-app"
 echo "=================================================="
-echo "  Docker Image: nodered/node-red:latest"
-echo "  Container: nodered-app"
-echo "  Ports: 1880:1880"
-echo ""
-echo "  Commands:"
-echo "    docker ps                    - Show running containers"
-echo "    docker logs nodered-app   - View container logs"
-echo "    docker exec -it nodered-app /bin/bash - Access container"
-echo ""
-echo "  Web Interface: http://VM_IP:1880"
-echo ""
-echo "  Access Methods:"
-echo "    SSH: Enabled (password: 'opennebula' + context keys)"
-echo "    Console: Auto-login as root (via OpenNebula console)"
-echo "    Serial: Auto-login as root (via serial console)"
-echo "=================================================="
-WELCOME_EOF
+EOF
+chmod +x /etc/profile.d/99-nodered-welcome.sh
 
-    chmod +x /etc/profile.d/99-$APPLIANCE_NAME-welcome.sh
+# Clean up
+apt-get autoremove -y
+apt-get autoclean
+find /var/log -type f -exec truncate -s 0 {} \;
 
-    # Clean up
-    apt-get autoremove -y
-    apt-get autoclean
-    find /var/log -type f -exec truncate -s 0 {} \;
-
-    sync
-
-    return 0
+sync
 }
 
 service_configure()
 {
-    # Use context variables or defaults for container configuration
-    CONTAINER_NAME="${ONEAPP_CONTAINER_NAME:-$DEFAULT_CONTAINER_NAME}"
-    CONTAINER_PORTS="${ONEAPP_CONTAINER_PORTS:-$DEFAULT_PORTS}"
-    CONTAINER_ENV="${ONEAPP_CONTAINER_ENV:-$DEFAULT_ENV_VARS}"
-    CONTAINER_VOLUMES="${ONEAPP_CONTAINER_VOLUMES:-$DEFAULT_VOLUMES}"
+    msg info "Starting Node-RED service configuration"
 
-    # Update the container startup script with context values
-    sed -i "s/CONTAINER_NAME=\"\${CONTAINER_NAME:-.*}\"/CONTAINER_NAME=\"\${CONTAINER_NAME:-$CONTAINER_NAME}\"/" /usr/local/bin/start-$APPLIANCE_NAME-container.sh
-    sed -i "s/CONTAINER_PORTS=\"\${CONTAINER_PORTS:-.*}\"/CONTAINER_PORTS=\"\${CONTAINER_PORTS:-$CONTAINER_PORTS}\"/" /usr/local/bin/start-$APPLIANCE_NAME-container.sh
-    sed -i "s/CONTAINER_ENV=\"\${CONTAINER_ENV:-.*}\"/CONTAINER_ENV=\"\${CONTAINER_ENV:-$CONTAINER_ENV}\"/" /usr/local/bin/start-$APPLIANCE_NAME-container.sh
-    sed -i "s/CONTAINER_VOLUMES=\"\${CONTAINER_VOLUMES:-.*}\"/CONTAINER_VOLUMES=\"\${CONTAINER_VOLUMES:-$CONTAINER_VOLUMES}\"/" /usr/local/bin/start-$APPLIANCE_NAME-container.sh
+    # Verify Docker is running
+    if ! systemctl is-active --quiet docker; then
+        msg error "Docker service is not running"
+        return 1
+    fi
 
+    msg info "✓ Docker service is running"
     return 0
 }
 
 service_bootstrap()
 {
-    # Start the container service
-    systemctl start $APPLIANCE_NAME-container.service
-    systemctl enable $APPLIANCE_NAME-container.service
+    msg info "Starting Node-RED service bootstrap"
 
-    return 0
+    # Setup and start the Node-RED container
+    setup_nodered_container
+
+    return $?
+}
+
+# Setup Node-RED container
+setup_nodered_container()
+{
+    local container_name="${ONEAPP_CONTAINER_NAME:-$DEFAULT_CONTAINER_NAME}"
+    local container_ports="${ONEAPP_CONTAINER_PORTS:-$DEFAULT_PORTS}"
+    local container_env="${ONEAPP_CONTAINER_ENV:-$DEFAULT_ENV_VARS}"
+    local container_volumes="${ONEAPP_CONTAINER_VOLUMES:-$DEFAULT_VOLUMES}"
+
+    msg info "Setting up Node-RED container: $container_name"
+
+    # Stop and remove existing container if it exists
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
+        msg info "Stopping existing container: $container_name"
+        docker stop "$container_name" 2>/dev/null || true
+        docker rm "$container_name" 2>/dev/null || true
+    fi
+
+    # Parse port mappings
+    local port_args=""
+    if [ -n "$container_ports" ]; then
+        IFS=',' read -ra PORT_ARRAY <<< "$container_ports"
+        for port in "${PORT_ARRAY[@]}"; do
+            port_args="$port_args -p $port"
+        done
+    fi
+
+    # Parse environment variables
+    local env_args=""
+    if [ -n "$container_env" ]; then
+        IFS=',' read -ra ENV_ARRAY <<< "$container_env"
+        for env in "${ENV_ARRAY[@]}"; do
+            env_args="$env_args -e $env"
+        done
+    fi
+
+    # Parse volume mounts
+    local volume_args=""
+    if [ -n "$container_volumes" ]; then
+        IFS=',' read -ra VOL_ARRAY <<< "$container_volumes"
+        for vol in "${VOL_ARRAY[@]}"; do
+            local host_path=$(echo "$vol" | cut -d':' -f1)
+            mkdir -p "$host_path"
+            volume_args="$volume_args -v $vol"
+        done
+    fi
+
+    # Start the container
+    msg info "Starting Node-RED container with:"
+    msg info "  Ports: $container_ports"
+    msg info "  Environment: ${container_env:-none}"
+    msg info "  Volumes: $container_volumes"
+
+    docker run -d \
+        --name "$container_name" \
+        --restart unless-stopped \
+        $port_args \
+        $env_args \
+        $volume_args \
+        "$DOCKER_IMAGE" 2>&1 | while read line; do msg info "  $line"; done
+
+    if [ $? -eq 0 ]; then
+        msg info "✓ Node-RED container started successfully"
+
+        # Wait for container to be healthy
+        local max_attempts=30
+        local attempt=0
+        while [ $attempt -lt $max_attempts ]; do
+            if docker ps --filter "name=$container_name" --format "{{.Status}}" | grep -q "Up"; then
+                msg info "✓ Node-RED container is running"
+                local status=$(docker ps --filter "name=$container_name" --format "{{.Status}}")
+                msg info "  Status: $status"
+                return 0
+            fi
+            attempt=$((attempt + 1))
+            sleep 2
+        done
+
+        # Check if container stopped unexpectedly
+        if docker ps -a --filter "name=$container_name" --format "{{.Status}}" | grep -q "Exited"; then
+            msg error "✗ Node-RED container stopped unexpectedly"
+            msg info "Container logs:"
+            docker logs "$container_name" 2>&1 | tail -10 | while read line; do
+                msg info "  $line"
+            done
+            return 1
+        fi
+    else
+        msg error "✗ Failed to start Node-RED container"
+        return 1
+    fi
 }
