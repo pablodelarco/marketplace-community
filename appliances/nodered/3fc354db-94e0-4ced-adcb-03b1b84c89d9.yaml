@@ -6,7 +6,7 @@ publisher: Pablo del Arco
 publisher_email: pdelarco@opennebula.io
 description: |-
   Node-RED is a low-code, flow-based programming tool for wiring together devices, APIs, and services. This appliance provides Node-Red
-  running in a Docker container on Ubuntu 22.04 LTS with VNC access and 
+  running in a Docker container on Ubuntu 22.04 LTS with VNC access and
   SSH key authentication.
 
   **Node-Red features:**
