@@ -208,7 +208,17 @@ ExecStart=-/sbin/agetty --noissue --autologin root %I $TERM
 Type=idle
 CONSOLE_EOF
 
-    systemctl enable getty@tty1.service
+    # Configure serial console and set root password
+    mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
+    cat > /etc/systemd/system/serial-getty@ttyS0.service.d/override.conf << 'SERIAL_EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --noissue --autologin root %I 115200,38400,9600 vt102
+Type=idle
+SERIAL_EOF
+
+    echo 'root:opennebula' | chpasswd
+    systemctl enable getty@tty1.service serial-getty@ttyS0.service
 
     # Create welcome message
     cat > /etc/profile.d/99-myapp-welcome.sh << 'WELCOME_EOF'
@@ -233,8 +243,9 @@ echo ""
 echo "  Web Interface: http://VM_IP:80"
 echo ""
 echo "  Access Methods:"
-echo "    SSH: Enabled (context keys)"
-echo "    Console: Auto-login as root"
+echo "    SSH: Enabled (password: 'opennebula' + context keys)"
+echo "    Console: Auto-login as root (via OpenNebula console)"
+echo "    Serial: Auto-login as root (via serial console)"
 echo "=================================================="
 WELCOME_EOF
 
