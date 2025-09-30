@@ -492,59 +492,351 @@ make myapp
 
 ---
 
-## 🧪 Testing
+## 🚀 Deploying to OpenNebula
 
-### Quick Test: Review Files
+After building the QCOW2 image (either automatic or manual approach), you need to deploy it to OpenNebula.
 
-```bash
-# Check appliance.sh
-cat appliances/myapp/appliance.sh | grep DOCKER_IMAGE
-
-# Check metadata
-cat appliances/myapp/metadata.yaml
-```
-
-### Full Test: Deploy to OpenNebula
+### Step 1: Copy Image to OpenNebula Frontend
 
 ```bash
-# Copy image to OpenNebula
-scp apps-code/community-apps/export/myapp.qcow2 root@opennebula:/var/tmp/
-
-# Create image
-ssh root@opennebula
-oneimage create --name "myapp" --path "/var/tmp/myapp.qcow2" --datastore 1
-
-# Deploy VM and test
-ssh root@VM_IP  # Password: opennebula
-docker ps       # Container should be running
+# From your build machine, copy the QCOW2 image to OpenNebula
+scp apps-code/community-apps/export/myapp.qcow2 root@opennebula-frontend:/var/tmp/
 ```
+
+**Note:** Replace `opennebula-frontend` with your OpenNebula frontend hostname or IP.
+
+### Step 2: Create OpenNebula Image
+
+SSH to your OpenNebula frontend and create the image:
+
+```bash
+ssh root@opennebula-frontend
+
+# Create the image in a datastore (replace datastore ID as needed)
+oneimage create --name "MyApp" \
+  --path "/var/tmp/myapp.qcow2" \
+  --type OS \
+  --datastore 1 \
+  --description "MyApp Docker Container Appliance" \
+  --disk_type QCOW2
+
+# Check image status
+oneimage list
+oneimage show <IMAGE_ID>
+```
+
+**Wait for the image to be in READY state** (this may take a few minutes depending on image size).
+
+### Step 3: Create VM Template
+
+Create a VM template for easy deployment:
+
+```bash
+cat > myapp-template.txt << 'EOF'
+NAME = "MyApp Template"
+CPU = "2"
+MEMORY = "2048"
+
+DISK = [
+  IMAGE_ID = "<IMAGE_ID_FROM_STEP_2>"
+]
+
+NIC = [
+  NETWORK = "default",
+  NETWORK_UNAME = "oneadmin"
+]
+
+CONTEXT = [
+  NETWORK = "YES",
+  SSH_PUBLIC_KEY = "$USER[SSH_PUBLIC_KEY]",
+  SET_HOSTNAME = "$NAME"
+]
+
+# Optional: Add context variables for container configuration
+CONTEXT = [
+  NETWORK = "YES",
+  SSH_PUBLIC_KEY = "$USER[SSH_PUBLIC_KEY]",
+  SET_HOSTNAME = "$NAME",
+  ONEAPP_CONTAINER_NAME = "myapp-container",
+  ONEAPP_CONTAINER_PORTS = "8080:8080",
+  ONEAPP_CONTAINER_ENV = "",
+  ONEAPP_CONTAINER_VOLUMES = "/data:/data"
+]
+
+GRAPHICS = [
+  TYPE = "VNC",
+  LISTEN = "0.0.0.0"
+]
+
+# Optional: Add user inputs for runtime configuration
+USER_INPUTS = [
+  ONEAPP_CONTAINER_NAME = "O|text|Container name",
+  ONEAPP_CONTAINER_PORTS = "O|text|Port mappings (format: host:container,host:container)",
+  ONEAPP_CONTAINER_ENV = "O|text|Environment variables (format: KEY=value,KEY=value)",
+  ONEAPP_CONTAINER_VOLUMES = "O|text|Volume mappings (format: host:container,host:container)"
+]
+EOF
+
+# Create the template
+onetemplate create myapp-template.txt
+
+# Verify template was created
+onetemplate list
+```
+
+**Replace `<IMAGE_ID_FROM_STEP_2>`** with the actual image ID from Step 2.
+
+### Step 4: Instantiate VM
+
+Deploy a VM from the template:
+
+```bash
+# Instantiate VM
+onetemplate instantiate <TEMPLATE_ID> --name "myapp-test-vm"
+
+# Monitor VM status
+onevm list
+onevm show <VM_ID>
+
+# Wait for VM to be in RUNNING state
+watch onevm list
+```
+
+### Step 5: Get VM IP Address
+
+```bash
+# Get VM IP address
+onevm show <VM_ID> | grep IP
+# Or
+onevm show <VM_ID> --json | jq -r '.VM.TEMPLATE.NIC[0].IP'
+```
+
+### Step 6: Test the Appliance
+
+**Test SSH access:**
+```bash
+# SSH with password
+ssh root@<VM_IP>
+# Password: opennebula
+
+# Or with your SSH key (if configured in context)
+ssh -i ~/.ssh/id_rsa root@<VM_IP>
+```
+
+**Verify Docker container is running:**
+```bash
+# Once connected to the VM
+docker ps
+
+# Check container logs
+docker logs myapp-container
+
+# Check container status
+docker inspect myapp-container
+```
+
+**Test the application:**
+```bash
+# If your app has a web interface
+curl http://<VM_IP>:8080
+
+# Or open in browser
+# http://<VM_IP>:8080
+```
+
+**Test console access (via OpenNebula Sunstone):**
+1. Open OpenNebula Sunstone web interface
+2. Go to Instances → VMs
+3. Click on your VM
+4. Click "VNC" button
+5. You should see auto-login to root with welcome message
 
 ---
 
-## 📤 Submitting to Marketplace
+## 📤 Submitting to OpenNebula Marketplace
+
+Once your appliance is tested and working, submit it to the community marketplace.
+
+### Step 1: Fork the Repository
+
+1. Go to https://github.com/OpenNebula/marketplace-community
+2. Click the **"Fork"** button in the top right
+3. This creates a copy in your GitHub account
+
+### Step 2: Clone Your Fork
 
 ```bash
-# 1. Fork repository on GitHub
-# https://github.com/OpenNebula/marketplace-community
-
-# 2. Clone your fork
+# Clone your forked repository
 git clone https://github.com/YOUR_USERNAME/marketplace-community.git
 cd marketplace-community
 
-# 3. Create branch
+# Add upstream remote (to sync with main repo later)
+git remote add upstream https://github.com/OpenNebula/marketplace-community.git
+
+# Verify remotes
+git remote -v
+```
+
+### Step 3: Create a Feature Branch
+
+```bash
+# Create and switch to a new branch
 git checkout -b feature/add-myapp-appliance
 
-# 4. Add files
-git add appliances/myapp/
-git add apps-code/community-apps/packer/myapp/
-git add logos/myapp.png  # Don't forget the logo!
-
-# 5. Commit and push
-git commit -m "Add MyApp appliance"
-git push origin feature/add-myapp-appliance
-
-# 6. Create Pull Request on GitHub
+# Verify you're on the new branch
+git branch
 ```
+
+**Branch naming convention:** `feature/add-<appliance-name>-appliance`
+
+### Step 4: Add Your Appliance Files
+
+```bash
+# Add appliance files
+git add appliances/myapp/
+
+# Add Packer configuration files
+git add apps-code/community-apps/packer/myapp/
+
+# Add logo (256x256 PNG recommended)
+# Make sure you have a logo file ready
+cp /path/to/your/logo.png logos/myapp.png
+git add logos/myapp.png
+```
+
+**Required files checklist:**
+- ✅ `appliances/myapp/appliance.sh`
+- ✅ `appliances/myapp/metadata.yaml`
+- ✅ `appliances/myapp/<UUID>.yaml`
+- ✅ `appliances/myapp/README.md`
+- ✅ `appliances/myapp/CHANGELOG.md`
+- ✅ `appliances/myapp/tests.yaml`
+- ✅ `appliances/myapp/context.yaml`
+- ✅ `appliances/myapp/tests/00-myapp_basic.rb`
+- ✅ `apps-code/community-apps/packer/myapp/*.pkr.hcl`
+- ✅ `logos/myapp.png`
+
+### Step 5: Commit Your Changes
+
+```bash
+# Check what files will be committed
+git status
+
+# Commit with a descriptive message
+git commit -m "Add MyApp appliance
+
+- Docker-based MyApp deployment
+- Automatic container startup
+- SSH and console access
+- OpenNebula context integration
+- Tested on Ubuntu 22.04"
+```
+
+**Good commit message format:**
+- First line: Brief summary (50 chars or less)
+- Blank line
+- Detailed description with bullet points
+
+### Step 6: Push to Your Fork
+
+```bash
+# Push your branch to your fork
+git push origin feature/add-myapp-appliance
+```
+
+### Step 7: Create Pull Request
+
+1. Go to your fork on GitHub: `https://github.com/YOUR_USERNAME/marketplace-community`
+2. You should see a banner: **"Compare & pull request"** - click it
+3. Or click **"Pull requests"** tab → **"New pull request"**
+4. Select:
+   - **base repository:** `OpenNebula/marketplace-community`
+   - **base branch:** `master`
+   - **head repository:** `YOUR_USERNAME/marketplace-community`
+   - **compare branch:** `feature/add-myapp-appliance`
+
+### Step 8: Fill Pull Request Details
+
+**Title:**
+```
+Add MyApp appliance
+```
+
+**Description template:**
+```markdown
+## Description
+
+This PR adds a new appliance for MyApp, a [brief description of what MyApp does].
+
+## Appliance Details
+
+- **Name:** MyApp
+- **Version:** 1.0.0
+- **Docker Image:** your-docker-image:tag
+- **Base OS:** Ubuntu 22.04
+- **Publisher:** Your Name
+
+## Features
+
+- Automatic Docker container startup
+- SSH access with password and key authentication
+- Console and serial console auto-login
+- OpenNebula context integration
+- Configurable via context variables:
+  - Container name
+  - Port mappings
+  - Environment variables
+  - Volume mappings
+
+## Testing
+
+- ✅ Built successfully with Packer
+- ✅ Deployed to OpenNebula
+- ✅ Container starts automatically
+- ✅ SSH access works (password + keys)
+- ✅ Console auto-login works
+- ✅ Application accessible on configured ports
+
+## Files Added
+
+- `appliances/myapp/` - Appliance definition files
+- `apps-code/community-apps/packer/myapp/` - Packer build configuration
+- `logos/myapp.png` - Appliance logo
+
+## Checklist
+
+- [x] Appliance builds successfully
+- [x] Appliance tested on OpenNebula
+- [x] Documentation included (README.md)
+- [x] Logo added (256x256 PNG)
+- [x] Follows Phoenix RTOS/Node-RED structure
+- [x] No sensitive information in files
+```
+
+### Step 9: Submit and Wait for Review
+
+1. Click **"Create pull request"**
+2. Wait for OpenNebula maintainers to review
+3. Address any feedback or requested changes
+4. Once approved, your appliance will be merged!
+
+### Step 10: Update Your PR (if needed)
+
+If maintainers request changes:
+
+```bash
+# Make the requested changes to your files
+nano appliances/myapp/appliance.sh
+
+# Commit the changes
+git add appliances/myapp/appliance.sh
+git commit -m "Address review feedback: fix container startup logic"
+
+# Push to your branch (PR will update automatically)
+git push origin feature/add-myapp-appliance
+```
+
+The PR will automatically update with your new commits.
 
 ---
 
