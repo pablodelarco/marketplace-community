@@ -18,24 +18,6 @@ This tutorial shows you how to use the **Docker Appliance Generator** to automat
 
 ---
 
-## 🎯 How It Works
-
-The generator takes a simple configuration file (`.env`) with your Docker container details and automatically creates all the files needed for an OpenNebula appliance:
-
-```
-Your .env file          Generator Script              Complete Appliance
-┌─────────────┐        ┌──────────────┐             ┌──────────────────┐
-│ DOCKER_IMAGE│   →    │  generate-   │      →      │ • appliance.sh   │
-│ APP_NAME    │        │  docker-     │             │ • metadata.yaml  │
-│ PORTS       │        │  appliance.sh│             │ • README.md      │
-│ VOLUMES     │        │              │             │ • Packer files   │
-│ ...         │        │              │             │ • Tests          │
-└─────────────┘        └──────────────┘             │ • + 8 more files │
-                                                     └──────────────────┘
-```
-
----
-
 ## 📦 Prerequisites
 
 **Required:**
