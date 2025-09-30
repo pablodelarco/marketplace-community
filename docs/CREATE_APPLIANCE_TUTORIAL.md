@@ -744,16 +744,33 @@ git commit -m "Add MyApp appliance
 git push origin feature/add-myapp-appliance
 ```
 
-### Step 7: Create Pull Request
+### Step 7: Create Pull Request (PR)
+
+**Option A: Using the GitHub banner (easiest)**
 
 1. Go to your fork on GitHub: `https://github.com/YOUR_USERNAME/marketplace-community`
-2. You should see a banner: **"Compare & pull request"** - click it
-3. Or click **"Pull requests"** tab → **"New pull request"**
-4. Select:
-   - **base repository:** `OpenNebula/marketplace-community`
-   - **base branch:** `master`
-   - **head repository:** `YOUR_USERNAME/marketplace-community`
-   - **compare branch:** `feature/add-myapp-appliance`
+2. After pushing, you should see a yellow/green banner at the top: **"Compare & pull request"**
+3. Click the **"Compare & pull request"** button
+
+**Option B: Manual PR creation**
+
+1. Go to your fork: `https://github.com/YOUR_USERNAME/marketplace-community`
+2. Click the **"Pull requests"** tab
+3. Click the green **"New pull request"** button
+4. You'll see the "Comparing changes" page
+5. Make sure the branches are set correctly:
+   - **base repository:** `OpenNebula/marketplace-community` (left side)
+   - **base branch:** `master` (left side)
+   - **head repository:** `YOUR_USERNAME/marketplace-community` (right side)
+   - **compare branch:** `feature/add-myapp-appliance` (right side)
+6. Click **"Create pull request"**
+
+**What you should see:**
+- Green text: "Able to merge" ✅
+- List of your commits
+- Files changed (should show your appliance files)
+
+If you see conflicts or errors, you may need to sync with upstream first.
 
 ### Step 8: Fill Pull Request Details
 
