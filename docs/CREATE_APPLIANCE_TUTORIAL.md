@@ -577,9 +577,3 @@ You've learned how to:
 - [Docker Hub](https://hub.docker.com/)
 - [Packer Documentation](https://www.packer.io/docs)
 - [OpenNebula Marketplace](https://marketplace.opennebula.io/)
-
----
-
-**Questions or Issues?**  
-Open an issue on the [marketplace-community repository](https://github.com/OpenNebula/marketplace-community/issues)
-
