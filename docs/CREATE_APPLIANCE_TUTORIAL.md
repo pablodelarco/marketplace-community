@@ -517,8 +517,7 @@ oneimage create --name "MyApp" \
   --path "/var/tmp/myapp.qcow2" \
   --type OS \
   --datastore 1 \
-  --description "MyApp Docker Container Appliance" \
-  --disk_type QCOW2
+  --description "MyApp Docker Container Appliance"
 
 # Check image status
 oneimage list
