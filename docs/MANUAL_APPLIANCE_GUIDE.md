@@ -217,69 +217,72 @@ CONSOLE_EOF
 
     # Serial console auto-login
     mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
-    cat > /etc/systemd/system/serial-getty@ttyS0.service.d/override.conf << 'SERIAL_EOF'
+    cat > /etc/systemd/system/serial-getty@ttyS0.service.d/override.conf << 'EOF'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --noissue --autologin root -s %I 115200,38400,9600 vt220
-SERIAL_EOF
+ExecStart=-/sbin/agetty --noissue --autologin root %I 115200,38400,9600 vt102
+Type=idle
+EOF
+    echo 'root:opennebula' | chpasswd
+    systemctl enable getty@tty1.service serial-getty@ttyS0.service
 
     # Create welcome message
-    cat > /etc/motd << 'MOTD_EOF'
-###############################################################################
-#                                                                             #
-#                    Welcome to MyApp Appliance                               #
-#                                                                             #
-###############################################################################
+    cat > /etc/profile.d/99-myapp-welcome.sh << 'EOF'
+#!/bin/bash
+case $- in *i*) ;; *) return;; esac
+echo "=================================================="
+echo "  MyApp Appliance - Container: myapp-container"
+echo "  Commands: docker ps | docker logs myapp-container"
+echo "=================================================="
+EOF
+    chmod +x /etc/profile.d/99-myapp-welcome.sh
 
-Docker container: myapp-container
-Access: http://<vm-ip>:8080
+    # Clean up
+    apt-get autoremove -y
+    apt-get autoclean
+    find /var/log -type f -exec truncate -s 0 {} \;
 
-Useful commands:
-  - docker ps                    # Check container status
-  - docker logs myapp-container  # View container logs
-  - docker restart myapp-container  # Restart container
-
-MOTD_EOF
-
-    # Set root password
-    msg info "Setting root password to 'opennebula'"
-    echo "root:opennebula" | chpasswd
-
-    # Enable SSH password authentication
-    sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-    sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+    sync
 
     msg info "${APP_NAME} installation completed"
 }
 
 service_configure()
 {
-    :
+    msg info "Starting ${APP_NAME} service configuration"
+
+    # Verify Docker is running
+    if ! systemctl is-active --quiet docker; then
+        msg error "Docker service is not running"
+        return 1
+    fi
+
+    msg info "✓ Docker service is running"
+    return 0
 }
 
 service_bootstrap()
 {
-    msg info "Starting ${APP_NAME} container"
+    msg info "Starting ${APP_NAME} service bootstrap"
+
+    # Setup and start the container
     setup_app_container
+
+    return $?
 }
 
 setup_app_container()
 {
-    # Get configuration from context or use defaults
     local container_name="${ONEAPP_CONTAINER_NAME:-$DEFAULT_CONTAINER_NAME}"
     local container_ports="${ONEAPP_CONTAINER_PORTS:-$DEFAULT_PORTS}"
     local container_env="${ONEAPP_CONTAINER_ENV:-$DEFAULT_ENV_VARS}"
     local container_volumes="${ONEAPP_CONTAINER_VOLUMES:-$DEFAULT_VOLUMES}"
 
-    msg info "Container configuration:"
-    msg info "  Name: $container_name"
-    msg info "  Ports: $container_ports"
-    msg info "  Environment: $container_env"
-    msg info "  Volumes: $container_volumes"
+    msg info "Setting up ${APP_NAME} container: $container_name"
 
     # Stop and remove existing container if it exists
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
-        msg info "Removing existing container: $container_name"
+        msg info "Stopping existing container: $container_name"
         docker stop "$container_name" 2>/dev/null || true
         docker rm "$container_name" 2>/dev/null || true
     fi
@@ -309,28 +312,52 @@ setup_app_container()
         for vol in "${VOL_ARRAY[@]}"; do
             local host_path=$(echo "$vol" | cut -d':' -f1)
             mkdir -p "$host_path"
-            # Set ownership to 1000:1000 (common for Docker containers)
-            chown -R 1000:1000 "$host_path" 2>/dev/null || true
             volume_args="$volume_args -v $vol"
         done
     fi
 
-    # Start container
-    msg info "Starting Docker container: $container_name"
-    docker run -d --name "$container_name" --restart unless-stopped $port_args $env_args $volume_args "$DOCKER_IMAGE"
+    # Start the container
+    msg info "Starting ${APP_NAME} container with:"
+    msg info "  Ports: $container_ports"
+    msg info "  Environment: ${container_env:-none}"
+    msg info "  Volumes: $container_volumes"
 
-    # Wait for container to start
-    sleep 5
+    docker run -d \
+        --name "$container_name" \
+        --restart unless-stopped \
+        $port_args \
+        $env_args \
+        $volume_args \
+        "$DOCKER_IMAGE" 2>&1 | while read line; do msg info "  $line"; done
 
-    # Verify container is running
-    if docker ps --format '{{.Names}}' | grep -q "^${container_name}$"; then
-        msg info "${APP_NAME} container started successfully"
-        msg info "Container status:"
-        docker ps --filter "name=${container_name}" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    if [ $? -eq 0 ]; then
+        msg info "✓ ${APP_NAME} container started successfully"
+
+        # Wait for container to be healthy
+        local max_attempts=30
+        local attempt=0
+        while [ $attempt -lt $max_attempts ]; do
+            if docker ps --filter "name=$container_name" --format "{{.Status}}" | grep -q "Up"; then
+                msg info "✓ ${APP_NAME} container is running"
+                local status=$(docker ps --filter "name=$container_name" --format "{{.Status}}")
+                msg info "  Status: $status"
+                return 0
+            fi
+            attempt=$((attempt + 1))
+            sleep 2
+        done
+
+        # Check if container stopped unexpectedly
+        if docker ps -a --filter "name=$container_name" --format "{{.Status}}" | grep -q "Exited"; then
+            msg error "✗ ${APP_NAME} container stopped unexpectedly"
+            msg info "Container logs:"
+            docker logs "$container_name" 2>&1 | tail -10 | while read line; do
+                msg info "  $line"
+            done
+            return 1
+        fi
     else
-        msg error "${APP_NAME} container failed to start"
-        msg error "Container logs:"
-        docker logs "$container_name" 2>&1 | tail -20
+        msg error "✗ Failed to start ${APP_NAME} container"
         return 1
     fi
 }
