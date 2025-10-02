@@ -101,7 +101,9 @@ Do you want to build the image now? (y/n):
 
 ### Step 4: Build the Image
 
-If you answered 'y' to the prompt, the build starts automatically. Otherwise:
+**Note:** The generator automatically registers your appliance in `Makefile.config` by adding it to the SERVICES list. This allows the build system to recognize your appliance.
+
+If you answered 'y' to the generator prompt, the build starts automatically. Otherwise:
 
 ```bash
 cd ../../apps-code/community-apps

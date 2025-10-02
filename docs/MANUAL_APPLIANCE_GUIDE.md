@@ -467,10 +467,32 @@ tests:
 
 ---
 
-## 🏗️ Step 5: Create Packer Configuration
+## 🏗️ Step 5: Register Appliance in Makefile.config
+
+**IMPORTANT:** You must add your appliance name to the SERVICES list in `Makefile.config` for the build system to recognize it.
 
 ```bash
 cd ../../apps-code/community-apps
+nano Makefile.config
+```
+
+Find the `SERVICES` line and add your appliance name:
+
+```makefile
+# Before:
+SERVICES := lithops lithops_worker rabbitmq ueransim example phoenixrtos srsran openfgs
+
+# After (add myapp):
+SERVICES := lithops lithops_worker rabbitmq ueransim example phoenixrtos srsran openfgs myapp
+```
+
+**Note:** This step is required for `make myapp` to work. Without it, the Makefile won't recognize your appliance.
+
+---
+
+## 🏗️ Step 6: Create Packer Configuration
+
+```bash
 mkdir -p packer/myapp
 cd packer/myapp
 ```
@@ -554,7 +576,7 @@ nano myapp.auto.pkrvars.hcl
 
 ---
 
-## 🎨 Step 6: Add Logo
+## 🎨 Step 7: Add Logo
 
 Create a 256x256 PNG logo:
 
@@ -565,7 +587,7 @@ cd ../../../../logos
 
 ---
 
-## 🔨 Step 7: Build the Appliance
+## 🔨 Step 8: Build the Appliance
 
 ```bash
 cd ../apps-code/community-apps
@@ -578,7 +600,7 @@ make myapp
 
 ---
 
-## 🧪 Step 8: Test Locally
+## 🧪 Step 9: Test Locally
 
 ```bash
 cd export
@@ -600,7 +622,7 @@ Connect via VNC to `localhost:5900` and verify:
 
 ---
 
-## 🚀 Step 9: Deploy to OpenNebula
+## 🚀 Step 10: Deploy to OpenNebula
 
 ### Upload Image
 
@@ -686,7 +708,7 @@ docker logs myapp-container
 
 ---
 
-## 📤 Step 10: Submit to Marketplace
+## 📤 Step 11: Submit to Marketplace
 
 ### Create Fork and Branch
 

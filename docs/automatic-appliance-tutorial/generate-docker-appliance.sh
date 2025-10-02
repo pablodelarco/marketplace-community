@@ -836,12 +836,36 @@ print_info "  ✅ apps-code/community-apps/packer/$APPLIANCE_NAME/82-configure-c
 print_info "  ✅ apps-code/community-apps/packer/$APPLIANCE_NAME/gen_context"
 print_info "  ✅ apps-code/community-apps/packer/$APPLIANCE_NAME/postprocess.sh"
 print_info ""
+
+# Add appliance to Makefile.config SERVICES list
+print_info "📝 Registering appliance in Makefile.config..."
+MAKEFILE_CONFIG="$REPO_ROOT/apps-code/community-apps/Makefile.config"
+
+if [ -f "$MAKEFILE_CONFIG" ]; then
+    # Check if appliance is already in SERVICES list
+    if grep -q "SERVICES.*$APPLIANCE_NAME" "$MAKEFILE_CONFIG"; then
+        print_info "  ℹ️  Appliance already registered in SERVICES list"
+    else
+        # Add appliance to SERVICES list
+        sed -i "s/^\(SERVICES := .*\)$/\1 $APPLIANCE_NAME/" "$MAKEFILE_CONFIG"
+        if grep -q "SERVICES.*$APPLIANCE_NAME" "$MAKEFILE_CONFIG"; then
+            print_success "  ✅ Added '$APPLIANCE_NAME' to SERVICES list in Makefile.config"
+        else
+            print_warning "  ⚠️  Could not automatically add to SERVICES list"
+            print_info "     Please manually add '$APPLIANCE_NAME' to SERVICES in Makefile.config"
+        fi
+    fi
+else
+    print_warning "  ⚠️  Makefile.config not found at $MAKEFILE_CONFIG"
+    print_info "     Please manually add '$APPLIANCE_NAME' to SERVICES list"
+fi
+print_info ""
+
 print_info "🚀 Next steps:"
 print_info "  1. Add logo: logos/$APPLIANCE_NAME.png (256x256 PNG)"
 print_info "  2. Build the image:"
 print_info "     cd apps-code/community-apps && make $APPLIANCE_NAME"
 print_info "  3. Test the appliance"
-print_info "  4. Add to Makefile.config SERVICES list (optional)"
 print_info ""
 
 # Ask user if they want to build the image now
