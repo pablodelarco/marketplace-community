@@ -6,7 +6,7 @@ publisher: Pablo de la Rco
 publisher_email: pablo@example.com
 description: |-
   n8n is a workflow automation tool that allows you to connect different services and automate tasks. This appliance provides n8n
-  running in a Docker container on Ubuntu 22.04 LTS with VNC access and 
+  running in a Docker container on Ubuntu 22.04 LTS with VNC access and
   SSH key authentication.
 
   **n8n features:**
