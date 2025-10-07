@@ -7,7 +7,7 @@ build {
   provisioner "shell-local" {
     inline = [
       "mkdir -p ${var.input_dir}/context",
-      "packer/phoenixrtos/gen_context > ${var.input_dir}/context/context.sh",
+      "${var.input_dir}/gen_context > ${var.input_dir}/context/context.sh",
       "mkisofs -o ${var.input_dir}/${var.appliance_name}-context.iso -V CONTEXT -J -R ${var.input_dir}/context",
     ]
   }
@@ -55,7 +55,7 @@ build {
 
   # revert insecure ssh options done by context start_script
   provisioner "shell" {
-    scripts = ["packer/phoenixrtos/81-configure-ssh.sh"]
+    scripts = ["${var.input_dir}/81-configure-ssh.sh"]
   }
 
   provisioner "shell" {
@@ -90,7 +90,7 @@ build {
   }
 
   provisioner "shell" {
-    scripts = ["packer/phoenixrtos/82-configure-context.sh"]
+    scripts = ["${var.input_dir}/82-configure-context.sh"]
   }
 
   provisioner "shell" {
@@ -104,6 +104,6 @@ build {
       "OUTPUT_DIR=${var.output_dir}",
       "APPLIANCE_NAME=${var.appliance_name}",
     ]
-    scripts = ["packer/phoenixrtos/postprocess.sh"]
+    scripts = ["${var.input_dir}/postprocess.sh"]
   }
 }
