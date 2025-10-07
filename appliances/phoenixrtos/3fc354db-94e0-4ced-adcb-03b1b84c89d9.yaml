@@ -57,9 +57,9 @@ opennebula_template:
   memory: '2048'
   name: Phoenix RTOS
   user_inputs:
-    - CONTAINER_NAME: 'M|text|Container name|phoenix-rtos-one|phoenix-rtos-one'
-    - CONTAINER_PORTS: 'M|text|Container ports (format: host:container)|8080:8080|8080:8080'
-    - CONTAINER_ENV: 'O|text|Environment variables (format: VAR1=value1,VAR2=value2)||'
-    - CONTAINER_VOLUMES: 'O|text|Volume mounts (format: /host/path:/container/path)||'
-  inputs_order: CONTAINER_NAME,CONTAINER_PORTS,CONTAINER_ENV,CONTAINER_VOLUMES
+    oneapp_container_name: 'M|text|Container name|phoenix-rtos-one|phoenix-rtos-one'
+    oneapp_container_ports: 'M|text|Container ports (format: host:container)|8080:8080|8080:8080'
+    oneapp_container_env: 'O|text|Environment variables (format: VAR1=value1,VAR2=value2)||'
+    oneapp_container_volumes: 'O|text|Volume mounts (format: /host/path:/container/path)||'
+  inputs_order: ONEAPP_CONTAINER_NAME,ONEAPP_CONTAINER_PORTS,ONEAPP_CONTAINER_ENV,ONEAPP_CONTAINER_VOLUMES
 logo: logos/phoenixrtos.png
