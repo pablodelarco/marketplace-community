@@ -1,88 +1,60 @@
 require_relative '../../../lib/community/app_handler'
 
-describe 'Phoenix RTOS Development Environment Appliance' do
+describe 'Phoenix RTOS Appliance' do
     include_context('vm_handler')
 
     # Test Docker installation
     it 'docker is installed and running' do
         cmd = 'which docker'
         @info[:vm].ssh(cmd).expect_success
-        
+
         cmd = 'systemctl is-active docker'
         @info[:vm].ssh(cmd).expect_success
     end
 
     # Test Phoenix RTOS container image is available
     it 'phoenix rtos container image is available' do
-        cmd = 'docker images --format "table {{.Repository}}:{{.Tag}}" | grep "pablodelarco/phoenix-rtos-one:latest"'
+        cmd = 'docker images --format "{{.Repository}}:{{.Tag}}" | grep "pablodelarco/phoenix-rtos-one:latest"'
         @info[:vm].ssh(cmd).expect_success
     end
 
-    # Test helper script is installed
-    it 'phoenix-rtos helper script is installed' do
-        cmd = 'test -x /usr/local/bin/phoenix-rtos'
+    # Test data directory exists
+    it 'data directory exists' do
+        cmd = 'test -d /data'
         @info[:vm].ssh(cmd).expect_success
     end
 
-    # Test container service is configured
-    it 'phoenix-rtos container service is configured' do
-        cmd = 'systemctl list-unit-files | grep phoenix-rtos-container'
+    # Test Phoenix RTOS container is running
+    it 'phoenix rtos container is running' do
+        cmd = 'docker ps --format "{{.Names}}" | grep "phoenix-rtos-one"'
         @info[:vm].ssh(cmd).expect_success
     end
 
-    # Test development tools are installed
-    it 'development tools are installed' do
-        tools = ['git', 'vim', 'curl', 'wget', 'python3']
-        tools.each do |tool|
-            cmd = "which #{tool}"
-            @info[:vm].ssh(cmd).expect_success
-        end
-    end
-
-    # Test container can be started
-    it 'phoenix rtos container can be started' do
-        # Start the container
-        cmd = 'systemctl start phoenix-rtos-container'
-        @info[:vm].ssh(cmd).expect_success
-        
-        # Wait a moment for container to start
-        sleep 5
-        
-        # Check if container is running
-        cmd = 'docker ps --format "table {{.Names}}" | grep phoenix-rtos-dev'
-        @info[:vm].ssh(cmd).expect_success
-        
-        # Test container is responsive
-        cmd = 'docker exec phoenix-rtos-dev echo "Container is running"'
+    # Test container is responsive
+    it 'phoenix rtos container is responsive' do
+        cmd = 'docker exec phoenix-rtos-one echo "Container is running"'
         execution = @info[:vm].ssh(cmd)
         expect(execution.success?).to be(true)
         expect(execution.stdout.strip).to eq('Container is running')
     end
 
-    # Test helper script functionality
-    it 'phoenix-rtos helper script works' do
-        # Test status command
-        cmd = 'phoenix-rtos status'
-        @info[:vm].ssh(cmd).expect_success
-        
-        # Test logs command
-        cmd = 'phoenix-rtos logs'
+    # Test container has correct restart policy
+    it 'container has restart policy configured' do
+        cmd = 'docker inspect phoenix-rtos-one --format "{{.HostConfig.RestartPolicy.Name}}"'
+        execution = @info[:vm].ssh(cmd)
+        expect(execution.success?).to be(true)
+        expect(execution.stdout.strip).to eq('unless-stopped')
+    end
+
+    # Test container port mapping
+    it 'container has port 8080 exposed' do
+        cmd = 'docker port phoenix-rtos-one 8080'
         @info[:vm].ssh(cmd).expect_success
     end
 
-    # Test working directory is created
-    it 'phoenix rtos working directory exists' do
-        work_dir = APP_CONTEXT_PARAMS[:PHOENIX_WORK_DIR] || '/opt/phoenix-rtos'
-        cmd = "test -d #{work_dir}"
-        @info[:vm].ssh(cmd).expect_success
-    end
-
-    # Test configuration files are created
-    it 'configuration files are created' do
-        cmd = 'test -f /etc/phoenix-rtos/container.conf'
-        @info[:vm].ssh(cmd).expect_success
-        
-        cmd = 'test -f /etc/docker/daemon.json'
+    # Test container volume mapping
+    it 'container has data volume mounted' do
+        cmd = 'docker inspect phoenix-rtos-one --format "{{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}" | grep "/data:/data"'
         @info[:vm].ssh(cmd).expect_success
     end
 
@@ -111,37 +83,11 @@ describe 'Phoenix RTOS Development Environment Appliance' do
         end
     end
 
-    # Test container auto-start functionality
-    it 'container auto-start is configured correctly' do
-        auto_start = APP_CONTEXT_PARAMS[:PHOENIX_AUTO_START] || 'YES'
-        
-        if auto_start.upcase == 'YES'
-            # Check if service is enabled
-            cmd = 'systemctl is-enabled phoenix-rtos-container'
-            @info[:vm].ssh(cmd).expect_success
-        end
-    end
-
-    # Test exposed ports configuration
-    it 'exposed ports are configured' do
-        expose_ports = APP_CONTEXT_PARAMS[:PHOENIX_EXPOSE_PORTS] || '22,80,443'
-        
-        unless expose_ports.empty?
-            # Check if container has port mappings
-            cmd = 'docker port phoenix-rtos-dev'
-            execution = @info[:vm].ssh(cmd)
-            
-            # Should have some port mappings if ports are exposed
-            expect(execution.success?).to be(true)
-        end
-    end
-
     # Cleanup: Stop container after tests
     after(:all) do
         if @info && @info[:vm]
-            @info[:vm].ssh('systemctl stop phoenix-rtos-container || true')
-            @info[:vm].ssh('docker stop phoenix-rtos-dev || true')
-            @info[:vm].ssh('docker rm phoenix-rtos-dev || true')
+            @info[:vm].ssh('docker stop phoenix-rtos-one || true')
+            @info[:vm].ssh('docker rm phoenix-rtos-one || true')
         end
     end
 end
