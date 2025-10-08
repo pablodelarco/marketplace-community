@@ -3,6 +3,39 @@ require_relative '../../../lib/community/app_handler'
 describe 'n8n Appliance' do
     include_context('vm_handler')
 
+    before(:all) do
+        # Wait for contextualization to complete (Docker installation and container startup)
+        puts "Waiting for contextualization to complete..."
+        sleep 60
+
+        # Wait for Docker service to be ready
+        max_wait = 120
+        wait_interval = 5
+        elapsed = 0
+
+        loop do
+            cmd = 'systemctl is-active docker 2>/dev/null'
+            result = @info[:vm].ssh(cmd)
+
+            if result.success?
+                puts "Docker service is active"
+                break
+            end
+
+            if elapsed >= max_wait
+                puts "Warning: Docker service not active after #{max_wait} seconds"
+                break
+            end
+
+            puts "Waiting for Docker service... (#{elapsed}s/#{max_wait}s)"
+            sleep wait_interval
+            elapsed += wait_interval
+        end
+
+        # Additional wait for container to start
+        sleep 10
+    end
+
     # Test Docker installation
     it 'docker is installed and running' do
         cmd = 'which docker'
@@ -54,7 +87,7 @@ describe 'n8n Appliance' do
 
     # Test container volume mapping
     it 'container has data volume mounted' do
-        cmd = 'docker inspect n8n-container --format "{{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}" | grep "/data:/home/node/.n8n"'
+        cmd = "docker inspect n8n-container --format '{{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}' | grep '/data:/home/node/.n8n'"
         @info[:vm].ssh(cmd).expect_success
     end
 
