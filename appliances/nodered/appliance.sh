@@ -27,7 +27,7 @@ APPLIANCE_NAME="nodered"
 
 # Appliance metadata
 ONE_SERVICE_NAME='Node-Red'
-ONE_SERVICE_VERSION='latest'   # Docker image tag
+ONE_SERVICE_VERSION='1.0'   # Appliance version
 ONE_SERVICE_BUILD=$(date +%s)
 ONE_SERVICE_SHORT_DESCRIPTION='Node-Red Docker Container Appliance'
 ONE_SERVICE_DESCRIPTION='Node-Red running in Docker container'
