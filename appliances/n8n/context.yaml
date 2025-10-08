@@ -1,5 +1,9 @@
 ---
-CONTAINER_NAME: n8n-container
-CONTAINER_PORTS: 5678:5678
-CONTAINER_ENV: N8N_HOST=0.0.0.0,N8N_PORT=5678,N8N_PROTOCOL=http,N8N_SECURE_COOKIE=false
-CONTAINER_VOLUMES: /data:/home/node/.n8n
+:tests:
+  'n8n':
+    :image_name: n8n.qcow2
+    :type: linux
+    :microenvs: ['context-kvm']
+    :slow: true
+    :enable_netcfg_common: True
+    :enable_netcfg_ip_methods: True
