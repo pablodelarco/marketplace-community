@@ -27,7 +27,7 @@ APPLIANCE_NAME="phoenixrtos"
 
 # Appliance metadata
 ONE_SERVICE_NAME='Phoenix RTOS'
-ONE_SERVICE_VERSION=   #latest
+ONE_SERVICE_VERSION='latest'   # Docker image tag
 ONE_SERVICE_BUILD=$(date +%s)
 ONE_SERVICE_SHORT_DESCRIPTION='Phoenix RTOS Docker Container Appliance'
 ONE_SERVICE_DESCRIPTION='Phoenix RTOS running in Docker container'
