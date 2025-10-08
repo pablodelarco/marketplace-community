@@ -26,7 +26,7 @@ APPLIANCE_NAME="n8n"
 ### Appliance metadata ###############################################
 
 ONE_SERVICE_NAME='n8n'
-ONE_SERVICE_VERSION=   #latest
+ONE_SERVICE_VERSION='latest'   # Docker image tag
 ONE_SERVICE_BUILD=$(date +%s)
 ONE_SERVICE_SHORT_DESCRIPTION='n8n Docker Container Appliance'
 ONE_SERVICE_DESCRIPTION='n8n running in Docker container'
