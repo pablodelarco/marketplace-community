@@ -9,6 +9,7 @@ set -e
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 show_usage() {
@@ -589,7 +590,7 @@ source "qemu" "$APPLIANCE_NAME" {
   memory      = 2048
   accelerator = "kvm"
 
-  iso_url      = "../one-apps/export/ubuntu2204.qcow2"
+  iso_url      = "../one-apps/export/ubuntu2204min.qcow2"
   iso_checksum = "none"
 
   headless = var.headless
@@ -819,6 +820,23 @@ print_success "Additional files generated"
 
 print_success "Packer configuration files generated"
 
+# Add appliance to Makefile.config SERVICES list
+print_info "📝 Adding '$APPLIANCE_NAME' to Makefile.config SERVICES list..."
+MAKEFILE_CONFIG="$REPO_ROOT/apps-code/community-apps/Makefile.config"
+
+if [ -f "$MAKEFILE_CONFIG" ]; then
+    # Check if appliance is already in SERVICES list
+    if grep -q "SERVICES.*$APPLIANCE_NAME" "$MAKEFILE_CONFIG"; then
+        print_info "  ℹ️  '$APPLIANCE_NAME' already in SERVICES list"
+    else
+        # Add appliance to SERVICES list
+        sed -i "s/^\(SERVICES :=.*\)$/\1 $APPLIANCE_NAME/" "$MAKEFILE_CONFIG"
+        print_success "  ✅ Added '$APPLIANCE_NAME' to SERVICES list"
+    fi
+else
+    print_warning "  ⚠️  Makefile.config not found, skipping SERVICES update"
+fi
+
 print_info "🎉 Appliance '$APPLIANCE_NAME' generated successfully!"
 print_info ""
 print_info "📁 Files created:"
@@ -835,20 +853,67 @@ print_info "  ✅ apps-code/community-apps/packer/$APPLIANCE_NAME/81-configure-s
 print_info "  ✅ apps-code/community-apps/packer/$APPLIANCE_NAME/82-configure-context.sh"
 print_info "  ✅ apps-code/community-apps/packer/$APPLIANCE_NAME/gen_context"
 print_info "  ✅ apps-code/community-apps/packer/$APPLIANCE_NAME/postprocess.sh"
+print_info "  ✅ apps-code/community-apps/Makefile.config (updated SERVICES list)"
 print_info ""
 print_info "🚀 Next steps:"
 print_info "  1. Add logo: logos/$APPLIANCE_NAME.png (256x256 PNG)"
 print_info "  2. Build the image:"
 print_info "     cd apps-code/community-apps && make $APPLIANCE_NAME"
 print_info "  3. Test the appliance"
-print_info "  4. Add to Makefile.config SERVICES list (optional)"
 print_info ""
 
 # Ask user if they want to build the image now
 read -p "$(echo -e "${BLUE}Do you want to build the image now? (y/n):${NC} ")" -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    print_info "🔨 Building the image..."
+    print_info "🔨 Preparing to build the image..."
+
+    # Check and initialize git submodules
+    print_info "📦 Checking git submodules..."
+    cd "$REPO_ROOT" || {
+        print_error "Failed to navigate to repository root"
+        exit 1
+    }
+
+    # Check if one-apps submodule is initialized
+    if [ ! -f "apps-code/one-apps/packer/build.sh" ]; then
+        print_info "  ⚙️  Initializing one-apps submodule (this may take a moment)..."
+        if git submodule update --init --recursive apps-code/one-apps; then
+            print_success "  ✅ Submodule initialized successfully"
+        else
+            print_error "Failed to initialize git submodules"
+            print_info "Please run manually: git submodule update --init --recursive"
+            exit 1
+        fi
+    else
+        print_info "  ✅ Submodule already initialized"
+    fi
+
+    # Check if base image exists
+    BASE_IMAGE="$REPO_ROOT/apps-code/one-apps/export/ubuntu2204min.qcow2"
+    if [ ! -f "$BASE_IMAGE" ]; then
+        print_info "📦 Base Ubuntu minimal image not found - building it now..."
+        print_info "  ℹ️  This is a one-time process that will take 3-5 minutes"
+        print_info "  ℹ️  The base image will be reused for all future appliances"
+        print_info ""
+
+        cd "$REPO_ROOT/apps-code/one-apps" || {
+            print_error "Failed to navigate to one-apps directory"
+            exit 1
+        }
+
+        print_info "🔨 Building base Ubuntu minimal image..."
+        if make ubuntu2204min; then
+            print_success "✅ Base image built successfully!"
+        else
+            print_error "❌ Base image build failed!"
+            print_info "You can try building it manually later:"
+            print_info "  cd $REPO_ROOT/apps-code/one-apps && make ubuntu2204min"
+            exit 1
+        fi
+    else
+        print_info "  ✅ Base Ubuntu minimal image found"
+    fi
 
     # Navigate to the build directory
     cd "$REPO_ROOT/apps-code/community-apps" || {
@@ -857,6 +922,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     }
 
     # Build the image using make
+    print_info "🔨 Building appliance image..."
     print_info "Running: make $APPLIANCE_NAME"
     if make "$APPLIANCE_NAME"; then
         print_success "✅ Image built successfully!"
