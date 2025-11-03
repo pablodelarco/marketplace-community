@@ -40,6 +40,7 @@ sudo apt install -y git qemu-kvm qemu-utils
 ```bash
 git clone https://github.com/OpenNebula/marketplace-community.git
 cd marketplace-community
+git checkout dcos/add-appliance-automation-script
 ```
 
 ### Step 2: Create Configuration File
@@ -178,14 +179,16 @@ Add to the `service_install()` function in `appliance.sh`:
 service_install()
 {
     # ... existing Docker installation ...
-    
+
     # Add your custom steps here
     apt-get install -y additional-package
-    
+
     # Custom configuration
     echo "custom config" > /etc/myapp.conf
 }
 ```
+
+**Important:** After modifying `appliance.sh` or any other appliance files, you **must rebuild** the image for changes to take effect. The scripts are executed during the Packer build process and are embedded into the final image.
 
 ### Rebuild After Changes
 
@@ -281,7 +284,119 @@ Connect via VNC to `localhost:5900` and verify:
 
 ### 2. Test on OpenNebula
 
-See the [Manual Appliance Guide](MANUAL_APPLIANCE_GUIDE.md#deploying-to-opennebula) for detailed deployment instructions.
+#### Step 2.1: Create OpenNebula Image
+
+Copy the built image to a location accessible by OpenNebula:
+
+```bash
+# Copy the image to a temporary location
+cp export/myapp.qcow2 /var/tmp/
+
+# Create the image in OpenNebula
+oneimage create --name "MyApp" \
+  --description "MyApp appliance created with automatic method" \
+  --type OS \
+  --datastore 1 \
+  --path /var/tmp/myapp.qcow2
+```
+
+**Note:** Replace `myapp` with your appliance name. The command will output an IMAGE_ID (e.g., `ID: 4`). Save this ID for the next step.
+
+#### Step 2.2: Create VM Template
+
+Create a VM template that uses your image:
+
+```bash
+cat > myapp-template.txt << 'EOF'
+NAME = "myapp-template"
+CPU = "2"
+MEMORY = "2048"
+DISK = [
+  IMAGE_ID = "X"
+]
+NIC = [
+  NETWORK_ID = "0"
+]
+CONTEXT = [
+  NETWORK = "YES",
+  SSH_PUBLIC_KEY = "$USER[SSH_PUBLIC_KEY]",
+  SET_HOSTNAME = "$NAME"
+]
+GRAPHICS = [
+  TYPE = "VNC",
+  LISTEN = "0.0.0.0"
+]
+EOF
+
+# Create the template
+onetemplate create myapp-template.txt
+```
+
+**Note:** The command will output a TEMPLATE_ID (e.g., `ID: 5`). Save this ID for the next step.
+
+#### Step 2.3: Instantiate the VM
+
+```bash
+# Replace <TEMPLATE_ID> with the ID from step 2.2
+onetemplate instantiate <TEMPLATE_ID> --name "myapp-test"
+```
+
+Wait for the VM to reach the RUNNING state:
+
+```bash
+# Check VM status
+onevm list
+
+# Get detailed VM information including IP address
+onevm show <VM_ID>
+```
+
+#### Step 2.4: Access the Application
+
+Once the VM is running, you can access it via SSH and the web interface (if applicable).
+
+**SSH Access:**
+
+```bash
+# If OpenNebula is on a remote host, use SSH port forwarding
+# Replace:
+#   - 8080 with your application's port (from APP_PORT in .env)
+#   - 172.16.100.X with your VM's IP address
+#   - user@opennebula-host with your OpenNebula frontend credentials
+
+ssh -L 8080:172.16.100.X:8080 user@opennebula-host
+```
+
+**Web Interface Access:**
+
+If your application has a web interface (`WEB_INTERFACE="true"`), open your browser:
+
+```
+http://localhost:8080
+```
+
+**Direct SSH to VM:**
+
+```bash
+# From the OpenNebula host
+ssh root@172.16.100.X
+
+# Verify the container is running
+docker ps
+
+# Check container logs
+docker logs <container-name>
+```
+
+#### Verification Checklist
+
+- ✅ VM boots successfully
+- ✅ Network configuration is applied (check with `ip addr`)
+- ✅ Docker service is running (`systemctl status docker`)
+- ✅ Container is running (`docker ps`)
+- ✅ Application is accessible via web interface (if applicable)
+- ✅ SSH access works with password and key authentication
+- ✅ Console auto-login works (check via VNC)
 
 ---
 
