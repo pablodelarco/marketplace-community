@@ -498,9 +498,12 @@ setup_app_container()
         IFS=',' read -ra VOL_ARRAY <<< "$container_volumes"
         for vol in "${VOL_ARRAY[@]}"; do
             local host_path=$(echo "$vol" | cut -d':' -f1)
-            mkdir -p "$host_path"
-            # Set ownership to 1000:1000 (common for Docker containers)
-            chown -R 1000:1000 "$host_path" 2>/dev/null || true
+            # Only create directory if it doesn't exist and is not a socket/device file
+            if [ ! -e "$host_path" ]; then
+                mkdir -p "$host_path"
+                # Set ownership to 1000:1000 (common for Docker containers)
+                chown -R 1000:1000 "$host_path" 2>/dev/null || true
+            fi
             volume_args="$volume_args -v $vol"
         done
     fi
