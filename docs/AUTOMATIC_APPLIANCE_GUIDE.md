@@ -407,11 +407,32 @@ docker logs <container-name>
 
 ### 1. Add a Logo
 
-Create a 256x256 PNG logo for your appliance:
+Create a 256x256 PNG logo for your appliance to display in the OpenNebula Sunstone UI.
+
+#### Step 1: Create or Download the Logo
+
+**Option A: Download from official source**
+```bash
+# Example: Download Nextcloud logo
+wget -O /tmp/app-logo.png "https://raw.githubusercontent.com/nextcloud/promo/master/nextcloud-logo-inverted.png"
+```
+
+**Option B: Create your own logo**
+- Use any image editor (GIMP, Photoshop, etc.)
+- Export as PNG with transparent background
+
+#### Step 2: Resize to 256x256
 
 ```bash
-# Create the logo file at:
-logos/myapp.png
+# Install ImageMagick if not available
+apt-get install imagemagick
+
+# Resize and save to logos directory
+convert /tmp/app-logo.png -resize 256x256 -background none -gravity center -extent 256x256 logos/myapp.png
+
+# Verify the logo
+ls -lh logos/myapp.png
+file logos/myapp.png
 ```
 
 **Requirements:**
@@ -419,6 +440,67 @@ logos/myapp.png
 - Size: 256x256 pixels
 - Transparent background recommended
 - Clear, recognizable icon representing your application
+
+#### Step 3: Deploy Logo to OpenNebula
+
+For the logo to appear in Sunstone, copy it to the FireEdge assets directory:
+
+```bash
+# Copy logo to FireEdge assets (on OpenNebula frontend)
+sudo cp logos/myapp.png /usr/lib/one/fireedge/dist/client/assets/images/logos/
+
+# Verify the file
+ls -lh /usr/lib/one/fireedge/dist/client/assets/images/logos/myapp.png
+
+# Restart FireEdge to pick up the new logo
+sudo systemctl restart opennebula-fireedge
+```
+
+#### Step 4: Update Image and Template
+
+Update your OpenNebula image and template to reference the logo:
+
+```bash
+# Create logo attribute file
+cat > /tmp/logo-update.txt << 'EOF'
+LOGO = "images/logos/myapp.png"
+EOF
+
+# Update the image (replace IMAGE_ID with your image ID)
+oneimage update IMAGE_ID /tmp/logo-update.txt
+
+# Update the template (replace TEMPLATE_ID with your template ID)
+onetemplate update TEMPLATE_ID /tmp/logo-update.txt
+
+# Verify the logo attribute
+oneimage show IMAGE_ID | grep LOGO
+onetemplate show TEMPLATE_ID | grep LOGO
+```
+
+#### Step 5: Verify in Sunstone
+
+1. Open Sunstone web interface
+2. Go to **Templates → VM Templates** or **Storage → Images**
+3. You should see your logo displayed next to the appliance
+4. If not visible, do a hard refresh (Ctrl+Shift+R or Cmd+Shift+R)
+
+**Example for Nextcloud:**
+```bash
+# Download and prepare logo
+wget -O /tmp/nextcloud-logo.png "https://raw.githubusercontent.com/nextcloud/promo/master/nextcloud-logo-inverted.png"
+convert /tmp/nextcloud-logo.png -resize 256x256 -background none -gravity center -extent 256x256 logos/nextcloud.png
+
+# Deploy to OpenNebula
+sudo cp logos/nextcloud.png /usr/lib/one/fireedge/dist/client/assets/images/logos/
+sudo systemctl restart opennebula-fireedge
+
+# Update image and template
+cat > /tmp/logo-update.txt << 'EOF'
+LOGO = "images/logos/nextcloud.png"
+EOF
+oneimage update 4 /tmp/logo-update.txt
+onetemplate update 3 /tmp/logo-update.txt
+```
 
 ### 2. Submit to Marketplace
 
@@ -551,16 +633,6 @@ grep "DOCKER_IMAGE=" appliances/myapp/appliance.sh
 mkdir -p /data
 chown 1001:1001 /data  # Change to your container's UID:GID
 ```
-
----
-
-## 📤 Next Steps
-
-After successfully building and testing your appliance:
-
-1. **Add a logo** - Create a 256x256 PNG logo at `logos/myapp.png`
-2. **Test thoroughly** - Deploy on OpenNebula and verify all functionality
-3. **Submit to marketplace** - See [Manual Appliance Guide](MANUAL_APPLIANCE_GUIDE.md#submitting-to-marketplace) for PR instructions
 
 ---
 
