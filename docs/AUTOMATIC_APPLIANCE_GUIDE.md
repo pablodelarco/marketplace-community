@@ -403,6 +403,107 @@ docker logs <container-name>
 
 ---
 
+## 📤 Next Steps
+
+### 1. Add a Logo
+
+Create a 256x256 PNG logo for your appliance:
+
+```bash
+# Create the logo file at:
+logos/myapp.png
+```
+
+**Requirements:**
+- Format: PNG
+- Size: 256x256 pixels
+- Transparent background recommended
+- Clear, recognizable icon representing your application
+
+### 2. Submit to Marketplace
+
+Once your appliance is tested and working, submit it to the OpenNebula Marketplace:
+
+#### Create Fork and Branch
+
+```bash
+# Fork the repository on GitHub first (https://github.com/OpenNebula/marketplace-community)
+# Then clone your fork
+git clone https://github.com/YOUR_USERNAME/marketplace-community.git
+cd marketplace-community
+
+# Create feature branch
+git checkout -b feature/add-myapp-appliance
+```
+
+#### Add Your Files
+
+```bash
+git add appliances/myapp/
+git add apps-code/community-apps/packer/myapp/
+git add logos/myapp.png
+
+git commit -m "Add MyApp appliance
+
+- Docker container with automatic startup
+- OpenNebula context integration
+- SSH and console access
+- Web interface on port 8080"
+```
+
+#### Push and Create PR
+
+```bash
+git push origin feature/add-myapp-appliance
+```
+
+Go to GitHub and create a Pull Request with:
+
+**Title:** `Add MyApp appliance`
+
+**Description:**
+```markdown
+## Description
+
+This PR adds a new appliance for MyApp, a [brief description].
+
+## Features
+
+- Docker container with automatic startup
+- OpenNebula context integration
+- Configurable via context variables:
+  - Container name
+  - Port mappings
+  - Environment variables
+  - Volume mappings
+
+## Testing
+
+- ✅ Built successfully with Packer
+- ✅ Deployed to OpenNebula
+- ✅ Container starts automatically
+- ✅ SSH access works (password + keys)
+- ✅ Console auto-login works
+- ✅ Application accessible on configured ports
+
+## Files Added
+
+- `appliances/myapp/` - Appliance definition files
+- `apps-code/community-apps/packer/myapp/` - Packer build configuration
+- `logos/myapp.png` - Appliance logo
+
+## Checklist
+
+- [x] Appliance builds successfully
+- [x] Appliance tested on OpenNebula
+- [x] Documentation included (README.md)
+- [x] Logo added (256x256 PNG)
+- [x] Follows community appliance structure
+- [x] No sensitive information in files
+```
+
+---
+
 ## 🐛 Troubleshooting
 
 ### Generator Fails
