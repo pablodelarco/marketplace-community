@@ -349,6 +349,9 @@ onevm list
 
 # Get detailed VM information including IP address
 onevm show <VM_ID>
+
+# SSH to the VM (if OpenNebula is on your local machine)
+onevm ssh <VM_ID>
 ```
 
 #### Step 2.4: Access the Application
