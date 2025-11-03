@@ -396,9 +396,9 @@ SERIAL_EOF
     systemctl enable getty@tty1.service serial-getty@ttyS0.service
 
     # Create welcome message
-    cat > /etc/profile.d/99-$APPLIANCE_NAME-welcome.sh << 'WELCOME_EOF'
+    cat > /etc/profile.d/99-${APPLIANCE_NAME}-welcome.sh << WELCOME_EOF
 #!/bin/bash
-case \\$- in
+case \\\$- in
     *i*) ;;
       *) return;;
 esac
@@ -415,16 +415,6 @@ echo "    docker ps                    - Show running containers"
 echo "    docker logs $DEFAULT_CONTAINER_NAME   - View container logs"
 echo "    docker exec -it $DEFAULT_CONTAINER_NAME /bin/bash - Access container"
 echo ""
-EOF
-
-if [ "$WEB_INTERFACE" = "true" ]; then
-    cat >> "$REPO_ROOT/appliances/$APPLIANCE_NAME/appliance.sh" << EOF
-echo "  Web Interface: http://VM_IP:$APP_PORT"
-echo ""
-EOF
-fi
-
-cat >> "$REPO_ROOT/appliances/$APPLIANCE_NAME/appliance.sh" << 'EOF'
 echo "  Access Methods:"
 echo "    SSH: Enabled (password: 'opennebula' + context keys)"
 echo "    Console: Auto-login as root (via OpenNebula console)"
@@ -432,7 +422,7 @@ echo "    Serial: Auto-login as root (via serial console)"
 echo "=================================================="
 WELCOME_EOF
 
-    chmod +x /etc/profile.d/99-$APPLIANCE_NAME-welcome.sh
+    chmod +x /etc/profile.d/99-${APPLIANCE_NAME}-welcome.sh
 
     # Clean up
     apt-get autoremove -y
