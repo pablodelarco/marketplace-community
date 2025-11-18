@@ -258,6 +258,26 @@ EOF
 ./generate-docker-appliance.sh postgres.env
 ```
 
+### Nextcloud All-in-One
+
+```bash
+cat > nextcloud.env << 'EOF'
+DOCKER_IMAGE="nextcloud/all-in-one:latest"
+APPLIANCE_NAME="nextcloud"
+APP_NAME="Nextcloud"
+PUBLISHER_NAME="Your Name"
+PUBLISHER_EMAIL="your@email.com"
+DEFAULT_PORTS="80:80,8080:8080,8443:8443"
+DEFAULT_VOLUMES="/var/run/docker.sock:/var/run/docker.sock:ro,nextcloud_aio_mastercontainer:/mnt/docker-aio-config"
+APP_PORT="8080"
+WEB_INTERFACE="true"
+EOF
+
+./generate-docker-appliance.sh nextcloud.env
+```
+
+**Note**: Nextcloud All-in-One requires access to the Docker socket for managing additional containers. Access the web interface at `http://VM_IP:8080` to complete the setup.
+
 ---
 
 ## 🧪 Testing Your Appliance
