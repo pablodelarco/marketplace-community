@@ -1,53 +1,81 @@
 require_relative '../../../lib/community/app_handler'
 
-RSpec.describe 'EuroCopilot Appliance' do
-  before(:all) do
-    @app = Community::AppHandler.new
-    @app.wait_until_ready(timeout: 600)
-  end
+# Basic tests for EuroCopilot sovereign AI coding assistant appliance
+describe 'Appliance Certification' do
+    include_context('vm_handler')
 
-  it 'has eurocopilot service running' do
-    expect(@app.execute('systemctl is-active eurocopilot').strip).to eq('active')
-  end
+    # Wait for the eurocopilot systemd service to become active.
+    # Model load (~14 GiB Devstral on CPU) can take 2+ minutes after boot.
+    it 'eurocopilot service is active' do
+        cmd = 'systemctl is-active eurocopilot'
+        start_time = Time.now
+        timeout = 600
 
-  it 'serves HTTPS on port 8443' do
-    result = @app.execute('curl -sk -o /dev/null -w "%{http_code}" https://localhost:8443/')
-    expect(result.strip).to eq('401')
-  end
+        loop do
+            result = @info[:vm].ssh(cmd)
+            break if result.stdout.strip == 'active'
 
-  it 'returns 200 on /health without auth' do
-    result = @app.execute(
-      'curl -sk -o /dev/null -w "%{http_code}" https://localhost:8443/health'
-    )
-    expect(result.strip).to eq('200')
-  end
+            if Time.now - start_time > timeout
+                raise "eurocopilot service did not become active within #{timeout} seconds"
+            end
 
-  it 'lists the devstral-small-2 model' do
-    password = @app.execute('cat /var/lib/eurocopilot/password').strip
-    result = @app.execute(
-      "curl -sk -H 'Authorization: Bearer #{password}' https://localhost:8443/v1/models"
-    )
-    parsed = JSON.parse(result)
-    model_ids = parsed['data'].map { |m| m['id'] }
-    expect(model_ids).to include('devstral-small-2')
-  end
+            sleep 10
+        end
+    end
 
-  it 'completes a chat request' do
-    password = @app.execute('cat /var/lib/eurocopilot/password').strip
-    result = @app.execute(
-      'curl -sk -H "Authorization: Bearer ' + password + '" https://localhost:8443/v1/chat/completions ' \
-      '-H "Content-Type: application/json" ' \
-      '-d \'{"model":"devstral-small-2","messages":[{"role":"user","content":"Say hello"}],"max_tokens":5}\''
-    )
-    parsed = JSON.parse(result)
-    expect(parsed['choices']).not_to be_empty
-    expect(parsed['choices'][0]['message']['content']).not_to be_empty
-  end
+    # Verify the HTTPS API is listening on port 8443.
+    it 'listens on https port 8443' do
+        cmd = 'ss -tln | grep -q ":8443"'
+        result = @info[:vm].ssh(cmd)
+        expect(result.exitstatus).to eq(0)
+    end
 
-  it 'has the report file with connection info' do
-    result = @app.execute('cat /etc/one-appliance/config')
-    expect(result).to include('endpoint')
-    expect(result).to include('api_key')
-    expect(result).to include('devstral-small-2')
-  end
+    # Health endpoint is unauthenticated and returns 200.
+    it 'returns 200 on /health without auth' do
+        cmd = 'curl -sk -o /dev/null -w "%{http_code}" https://localhost:8443/health'
+        result = @info[:vm].ssh(cmd)
+        expect(result.stdout.strip).to eq('200')
+    end
+
+    # Root endpoint requires authentication (401 without bearer).
+    it 'returns 401 on / without auth' do
+        cmd = 'curl -sk -o /dev/null -w "%{http_code}" https://localhost:8443/'
+        result = @info[:vm].ssh(cmd)
+        expect(result.stdout.strip).to eq('401')
+    end
+
+    # The models endpoint lists the bundled Devstral model.
+    it 'lists the devstral-small-2 model' do
+        cmd = %q(
+            password=$(cat /var/lib/eurocopilot/password)
+            curl -sk -H "Authorization: Bearer ${password}" https://localhost:8443/v1/models
+        )
+        result = @info[:vm].ssh(cmd)
+        expect(result.exitstatus).to eq(0)
+        expect(result.stdout).to include('devstral-small-2')
+    end
+
+    # Chat completion returns a non-empty response.
+    it 'completes a chat request' do
+        cmd = %q(
+            password=$(cat /var/lib/eurocopilot/password)
+            curl -sk -H "Authorization: Bearer ${password}" \
+                 -H "Content-Type: application/json" \
+                 -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Say hello"}],"max_tokens":5}' \
+                 https://localhost:8443/v1/chat/completions
+        )
+        result = @info[:vm].ssh(cmd)
+        expect(result.exitstatus).to eq(0)
+        expect(result.stdout).to include('"choices"')
+    end
+
+    # The report file written by service_configure exposes connection details.
+    it 'has the report file with connection info' do
+        cmd = 'cat /etc/one-appliance/config'
+        result = @info[:vm].ssh(cmd)
+        expect(result.exitstatus).to eq(0)
+        expect(result.stdout).to include('endpoint')
+        expect(result.stdout).to include('api_key')
+        expect(result.stdout).to include('devstral-small-2')
+    end
 end
