@@ -13,10 +13,17 @@ build {
   }
 }
 
-# Build VM image using QEMU
+# Build VM image using QEMU.
+#
+# Build-time resources are intentionally modest (2 vCPU / 8 GiB) to fit the
+# Jenkins community-distro build host. The install step is bound by disk + I/O
+# (compile llama.cpp, download ~14 GiB Devstral GGUF), not RAM — the model is
+# never loaded during build. The recommended *runtime* allocation (16 vCPU /
+# 32 GiB) is declared in appliances/eurocopilot/metadata.yaml :one: :template:
+# and the marketplace UUID YAML; that's what users get when they instantiate.
 source "qemu" "eurocopilot" {
-  cpus        = 16
-  memory      = 32768
+  cpus        = 2
+  memory      = 8192
   accelerator = "kvm"
 
   iso_url      = "../one-apps/export/ubuntu2404.qcow2"
