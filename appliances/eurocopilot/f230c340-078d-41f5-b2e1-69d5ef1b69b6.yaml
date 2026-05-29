@@ -2,24 +2,30 @@
 #
 # After a successful build, update these PLACEHOLDER values:
 #   1. images[0].url          -- Replace PUBLISH_URL with actual hosting URL
-#   2. images[0].checksum.md5 -- From: md5sum build/export/eurocopilot-2.7.0.qcow2
-#   3. images[0].checksum.sha256 -- From: sha256sum build/export/eurocopilot-2.7.0.qcow2
-#   4. images[0].size         -- From: qemu-img info --output=json build/export/eurocopilot-2.7.0.qcow2 | jq '.["virtual-size"]'
+#   2. images[0].checksum.md5 -- From: md5sum build/export/eurocopilot-2.8.0.qcow2
+#   3. images[0].checksum.sha256 -- From: sha256sum build/export/eurocopilot-2.8.0.qcow2
+#   4. images[0].size         -- From: qemu-img info --output=json build/export/eurocopilot-2.8.0.qcow2 | jq '.["virtual-size"]'
 #   5. Rename this file to a UUID for marketplace PR: cp marketplace.yaml $(uuidgen).yaml
 #
 ---
-name: EuroCopilot 2.7.0
-version: 2.7.0
+name: EuroCopilot 2.8.0
+version: 2.8.0
 publisher: OpenNebula Systems
 description: |-
   One-click sovereign AI coding assistant powered by
-  [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B, Mistral AI)
+  [Mistral 7B Instruct](https://mistral.ai/news/announcing-mistral-7b) (7B, Mistral AI)
   running on CPU via [llama.cpp](https://github.com/ggerganov/llama.cpp). Not all
-  AI needs GPU -- this 24B parameter model delivers practical coding assistance on
-  any 32 GB VM with 16+ vCPUs. Import, instantiate, code.
+  AI needs GPU -- this 7B parameter model delivers practical coding assistance on
+  any 8 GB VM with 4+ vCPUs. Import, instantiate, code.
+
+  **Opt-in upgrades:** [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B),
+  [Mistral Small Instruct](https://mistral.ai/news/mistral-small-3) (24B), and
+  [Mistral Nemo Instruct](https://mistral.ai/news/mistral-nemo) (12B) can be
+  selected from the OpenNebula instantiation wizard and download from Hugging
+  Face on first boot. Recommended VM: 16+ vCPU / 32 GB RAM for 24B models.
 
   **European Sovereign AI** -- 100% open-source stack built by European
-  companies: Mistral AI (Paris) for the model, OpenNebula (Madrid) for
+  companies: Mistral AI (Paris) for the models, OpenNebula (Madrid) for
   the cloud platform. 100% sovereign: your code stays in your jurisdiction,
   your data never leaves your infrastructure. All components under
   Apache 2.0 license.
@@ -41,8 +47,9 @@ description: |-
   - Idempotent reconfiguration on every boot
   - Optional LiteLLM load balancing across multiple VMs for team use
 short_description: >-
-  Sovereign AI coding copilot (Devstral Small 2 24B on CPU via llama.cpp).
-  No GPU required. European open-source. One-click deployment.
+  Sovereign AI coding copilot (Mistral 7B Instruct on CPU via llama.cpp;
+  Devstral 24B and Mistral 12B/24B opt-in). No GPU required. European
+  open-source. One-click deployment.
 tags:
   - ai
   - llm
@@ -51,11 +58,11 @@ tags:
   - sovereign
   - cpu
   - llama-cpp
-  - devstral
+  - mistral
   - aider
   - ubuntu
 format: qcow2
-creation_time: 1739500800
+creation_time: 1780012800
 os-id: Ubuntu
 os-release: '24.04 LTS'
 os-arch: x86_64
@@ -102,7 +109,7 @@ opennebula_template:
     ONEAPP_COPILOT_LB_BACKENDS
   user_inputs:
     oneapp_copilot_ai_model: >-
-      M|list|AI Model|Devstral Small 2 (24B ~14GB built-in),Mistral Small Instruct (24B ~14GB),Mistral Nemo Instruct (12B ~7GB),Mistral 7B Instruct (7B ~4GB)|Devstral Small 2 (24B ~14GB built-in)
+      M|list|AI Model|Mistral 7B Instruct (7B ~4GB built-in),Devstral Small 2 (24B ~14GB),Mistral Small Instruct (24B ~14GB),Mistral Nemo Instruct (12B ~7GB)|Mistral 7B Instruct (7B ~4GB built-in)
     oneapp_copilot_context_size: >-
       O|list|Context Window (tokens)|8192,16384,32768|32768
     oneapp_copilot_cpu_threads: >-
@@ -126,7 +133,7 @@ opennebula_template:
 logo: eurocopilot.png
 images:
   - name: eurocopilot_os
-    url: 'https://PUBLISH_URL/eurocopilot-2.7.0.qcow2'
+    url: 'https://PUBLISH_URL/eurocopilot-2.8.0.qcow2'
     type: OS
     dev_prefix: vd
     driver: qcow2

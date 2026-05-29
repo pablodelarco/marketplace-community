@@ -4,6 +4,24 @@ All notable changes to the EuroCopilot appliance will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.8.0] - 2026-05-29
+
+### Changed
+
+- **Built-in model swapped from Devstral Small 2 24B to Mistral 7B Instruct v0.3.**
+  Devstral, Mistral Small Instruct 24B, and Mistral Nemo Instruct 12B remain
+  selectable from the OpenNebula instantiation wizard and download from Hugging
+  Face on first boot when selected. The qcow2 image drops from ~15 GiB to
+  ~6 GiB, which makes the marketplace `CLONING` step finish well inside the
+  community-distro test framework's 180-second deploy timeout. Users who want
+  Devstral can pick it from the dropdown at instantiation time — the appliance
+  fetches it on first boot (~5-10 min on a 1 Gbps link) and persists the
+  selection across reboots.
+- Default VM resources for the built-in Mistral 7B are now 4 vCPU / 8 GB; the
+  template still recommends 16 vCPU / 32 GB for users who select a 12B+ model.
+- Graceful-fallback chain now falls back to built-in Mistral 7B Instruct when
+  a runtime download fails (was: built-in Devstral).
+
 ## [2.7.0] - 2026-03-16
 
 ### Fixed

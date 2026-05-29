@@ -5,7 +5,9 @@ describe 'Appliance Certification' do
     include_context('vm_handler')
 
     # Wait for the eurocopilot systemd service to become active.
-    # Model load (~14 GiB Devstral on CPU) can take 2+ minutes after boot.
+    # Built-in Mistral 7B Instruct (~4 GiB) loads in ~30-60s; if a user selected
+    # a larger opt-in model (12B/24B), the first boot has to download it too —
+    # the 600s timeout is generous enough for either path.
     it 'eurocopilot service is active' do
         cmd = 'systemctl is-active eurocopilot'
         start_time = Time.now
@@ -44,15 +46,15 @@ describe 'Appliance Certification' do
         expect(result.stdout.strip).to eq('401')
     end
 
-    # The models endpoint lists the bundled Devstral model.
-    it 'lists the devstral-small-2 model' do
+    # The models endpoint lists the bundled Mistral 7B Instruct model.
+    it 'lists the mistral-7b model' do
         cmd = %q(
             password=$(cat /var/lib/eurocopilot/password)
             curl -sk -H "Authorization: Bearer ${password}" https://localhost:8443/v1/models
         )
         result = @info[:vm].ssh(cmd)
         expect(result.exitstatus).to eq(0)
-        expect(result.stdout).to include('devstral-small-2')
+        expect(result.stdout).to include('mistral-7b')
     end
 
     # Chat completion returns a non-empty response.
@@ -61,7 +63,7 @@ describe 'Appliance Certification' do
             password=$(cat /var/lib/eurocopilot/password)
             curl -sk -H "Authorization: Bearer ${password}" \
                  -H "Content-Type: application/json" \
-                 -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Say hello"}],"max_tokens":5}' \
+                 -d '{"model":"mistral-7b","messages":[{"role":"user","content":"Say hello"}],"max_tokens":5}' \
                  https://localhost:8443/v1/chat/completions
         )
         result = @info[:vm].ssh(cmd)
@@ -76,6 +78,6 @@ describe 'Appliance Certification' do
         expect(result.exitstatus).to eq(0)
         expect(result.stdout).to include('endpoint')
         expect(result.stdout).to include('api_key')
-        expect(result.stdout).to include('devstral-small-2')
+        expect(result.stdout).to include('mistral-7b')
     end
 end

@@ -1,12 +1,14 @@
 # EuroCopilot
 
-Sovereign AI coding assistant. Runs [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B) on CPU via [llama.cpp](https://github.com/ggerganov/llama.cpp). No GPU required.
+Sovereign AI coding assistant. Runs [Mistral 7B Instruct](https://mistral.ai/news/announcing-mistral-7b) on CPU via [llama.cpp](https://github.com/ggerganov/llama.cpp). No GPU required.
+
+Larger Mistral-family models — [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B), [Mistral Small Instruct](https://mistral.ai/news/mistral-small-3) (24B), and [Mistral Nemo Instruct](https://mistral.ai/news/mistral-nemo) (12B) — are available as opt-in models that download on first boot when selected.
 
 ## Quick Start
 
 1. Import the appliance from the OpenNebula marketplace
-2. Create a VM (8+ vCPU, 32 GB RAM, `CPU_MODEL=host-passthrough`)
-3. Wait ~2 min for the model to load
+2. Create a VM (4+ vCPU, 8 GB RAM is enough for the built-in Mistral 7B; bump to 16+ vCPU / 32 GB RAM if you select a 12B / 24B model)
+3. Wait ~1 min for the built-in model to load (or ~5-10 min on first boot if you selected an opt-in model — it has to download from Hugging Face)
 4. Get your API key: `ssh root@<vm-ip>` then `cat /etc/one-appliance/config`
 5. Connect from VS Code with [Continue](https://continue.dev) or [Cline](https://cline.bot) pointing at `https://<vm-ip>:8443`
 
@@ -22,7 +24,7 @@ Sovereign AI coding assistant. Runs [Devstral Small 2](https://mistral.ai/news/d
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ONEAPP_COPILOT_AI_MODEL` | Devstral Small 2 (built-in) | Model selection from catalog |
+| `ONEAPP_COPILOT_AI_MODEL` | Mistral 7B Instruct (built-in) | Model selection from catalog (Mistral 7B built-in; Devstral 24B / Mistral Small 24B / Mistral Nemo 12B download on first boot when selected) |
 | `ONEAPP_COPILOT_CONTEXT_SIZE` | 16384 | Context window (tokens) |
 | `ONEAPP_COPILOT_CPU_THREADS` | 0 (auto) | CPU threads for inference |
 | `ONEAPP_COPILOT_API_PASSWORD` | (auto-generated) | API key / Bearer token |
@@ -45,7 +47,7 @@ Sovereign AI coding assistant. Runs [Devstral Small 2](https://mistral.ai/news/d
 
 ## License
 
-Apache 2.0. Model: Devstral Small 2 (Apache 2.0, Mistral AI).
+Apache 2.0. Built-in model: Mistral 7B Instruct v0.3 (Apache 2.0, Mistral AI). Opt-in models — Devstral Small 2 24B, Mistral Small Instruct 24B, Mistral Nemo Instruct 12B — all Apache 2.0 from Mistral AI.
 
 ## Author
 

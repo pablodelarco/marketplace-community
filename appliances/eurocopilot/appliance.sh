@@ -3,7 +3,7 @@
 # EuroCopilot -- ONE-APPS Appliance Lifecycle Script
 #
 # Implements the one-apps service_* interface for a sovereign AI coding
-# assistant powered by llama-server (llama.cpp) + Devstral Small 2 24B,
+# assistant powered by llama-server (llama.cpp) + Mistral 7B Instruct,
 # packaged as an OpenNebula marketplace appliance. CPU-only inference with
 # native TLS, API key auth, and Prometheus metrics. No GPU required.
 # --------------------------------------------------------------------------
@@ -13,10 +13,12 @@
 ONE_SERVICE_NAME='Service EuroCopilot - Sovereign AI Coding Assistant'
 ONE_SERVICE_VERSION='2.0.0'
 ONE_SERVICE_BUILD=$(date +%s)
-ONE_SERVICE_SHORT_DESCRIPTION='CPU-only AI coding copilot (Devstral Small 2 24B via llama.cpp)'
-ONE_SERVICE_DESCRIPTION='Sovereign AI coding assistant serving Devstral Small 2 24B
+ONE_SERVICE_SHORT_DESCRIPTION='CPU-only AI coding copilot (Mistral 7B Instruct via llama.cpp)'
+ONE_SERVICE_DESCRIPTION='Sovereign AI coding assistant serving Mistral 7B Instruct
 via llama-server (llama.cpp). OpenAI-compatible API for aider and any OpenAI client.
-Native TLS, API key auth, and Prometheus metrics. CPU-only inference, no GPU required.'
+Native TLS, API key auth, and Prometheus metrics. CPU-only inference, no GPU required.
+Devstral Small 2 24B, Mistral Small 24B, and Mistral Nemo 12B are available as
+opt-in alternatives that download on first boot when selected.'
 ONE_SERVICE_RECONFIGURABLE=true
 
 # --------------------------------------------------------------------------
@@ -27,7 +29,7 @@ ONE_SERVICE_RECONFIGURABLE=true
 # every VM boot / reconfigure cycle.
 # --------------------------------------------------------------------------
 ONE_SERVICE_PARAMS=(
-    'ONEAPP_COPILOT_AI_MODEL'         'configure' 'AI model selection'                          'Devstral Small 2 (24B ~14GB built-in)'
+    'ONEAPP_COPILOT_AI_MODEL'         'configure' 'AI model selection'                          'Mistral 7B Instruct (7B ~4GB built-in)'
     'ONEAPP_COPILOT_CONTEXT_SIZE'  'configure' 'Model context window in tokens'              '16384'
     'ONEAPP_COPILOT_API_PASSWORD'       'configure' 'API key / Bearer token (auto-generated if empty)' ''
     'ONEAPP_COPILOT_TLS_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
@@ -43,7 +45,7 @@ ONE_SERVICE_PARAMS=(
 # --------------------------------------------------------------------------
 # Default value assignments
 # --------------------------------------------------------------------------
-ONEAPP_COPILOT_AI_MODEL="${ONEAPP_COPILOT_AI_MODEL:-Devstral Small 2 (24B ~14GB built-in)}"
+ONEAPP_COPILOT_AI_MODEL="${ONEAPP_COPILOT_AI_MODEL:-Mistral 7B Instruct (7B ~4GB built-in)}"
 ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-16384}"
 ONEAPP_COPILOT_API_PASSWORD="${ONEAPP_COPILOT_API_PASSWORD:-}"
 ONEAPP_COPILOT_TLS_DOMAIN="${ONEAPP_COPILOT_TLS_DOMAIN:-}"
@@ -79,19 +81,21 @@ readonly LB_HEALTHCHECK_UNIT="/etc/systemd/system/eurocopilot-lb-healthcheck.ser
 readonly LB_HEALTHCHECK_TIMER="/etc/systemd/system/eurocopilot-lb-healthcheck.timer"
 
 # Built-in model (baked into image at install time)
-readonly BUILTIN_MODEL_GGUF="Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf"
-readonly BUILTIN_MODEL_HF_REPO="unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF"
+readonly BUILTIN_MODEL_GGUF="Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
+readonly BUILTIN_MODEL_HF_REPO="bartowski/Mistral-7B-Instruct-v0.3-GGUF"
 
 # ---------------------------------------------------------------------------
 # Model catalog: name -> "model_id|gguf_filename|hf_url"
-# The first entry (Devstral) is baked into the image at build time.
-# Others are downloaded on first boot when selected.
+# The first entry (Mistral 7B Instruct) is baked into the image at build time
+# so the marketplace qcow2 stays compact (~6 GiB) and clones quickly during
+# OpenNebula instantiation. Other entries are downloaded on first boot when
+# selected — trades a one-time download for a larger model.
 # ---------------------------------------------------------------------------
 declare -A MODEL_CATALOG=(
-    ["Devstral Small 2 (24B ~14GB built-in)"]="devstral-small-2|${BUILTIN_MODEL_GGUF}|"
+    ["Mistral 7B Instruct (7B ~4GB built-in)"]="mistral-7b|${BUILTIN_MODEL_GGUF}|"
+    ["Devstral Small 2 (24B ~14GB)"]="devstral-small-2|Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf|https://huggingface.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF/resolve/main/Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf"
     ["Mistral Small Instruct (24B ~14GB)"]="mistral-small-24b|Mistral-Small-24B-Instruct-2501-Q4_K_M.gguf|https://huggingface.co/bartowski/Mistral-Small-24B-Instruct-2501-GGUF/resolve/main/Mistral-Small-24B-Instruct-2501-Q4_K_M.gguf"
     ["Mistral Nemo Instruct (12B ~7GB)"]="mistral-nemo-12b|Mistral-Nemo-Instruct-2407-Q4_K_M.gguf|https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf"
-    ["Mistral 7B Instruct (7B ~4GB)"]="mistral-7b|Mistral-7B-Instruct-v0.3-Q4_K_M.gguf|https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
 )
 
 # ==========================================================================
@@ -268,7 +272,7 @@ register_with_lb() {
     local _model_id="${ONEAPP_COPILOT_REGISTER_MODEL_NAME:-}"
     if [[ -z "${_model_id}" ]]; then
         _load_model_info
-        _model_id="${ACTIVE_MODEL_ID:-devstral-small-2}"
+        _model_id="${ACTIVE_MODEL_ID:-mistral-7b}"
     fi
 
     # Strip trailing slash from LB URL
@@ -567,16 +571,17 @@ service_install() {
 
     log_copilot info "llama-server installed to ${LLAMA_BIN}"
 
-    # 4. Download Devstral Q4_K_M GGUF from Hugging Face
+    # 4. Download Mistral 7B Instruct Q4_K_M GGUF from Hugging Face (built-in default)
     mkdir -p "${LLAMA_MODEL_DIR}"
     local _model_url="https://huggingface.co/${BUILTIN_MODEL_HF_REPO}/resolve/main/${BUILTIN_MODEL_GGUF}"
-    log_copilot info "Downloading ${BUILTIN_MODEL_GGUF} from Hugging Face (approx 14 GB)"
+    log_copilot info "Downloading ${BUILTIN_MODEL_GGUF} from Hugging Face (approx 4 GB)"
     curl -fSL --progress-bar -o "${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}" "${_model_url}"
     log_copilot info "Model downloaded to ${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}"
 
     # 5. Create wrapper script (handles conditional TLS for standalone vs LB mode)
     mkdir -p /etc/eurocopilot
-    # Custom Jinja chat template: uses Devstral's native tokens ([INST]/[/INST])
+    # Custom Jinja chat template: uses Mistral's native tokens ([INST]/[/INST])
+    # — works for both the built-in Mistral 7B Instruct and the opt-in Mistral/Devstral siblings
     # and merges consecutive same-role messages (required for OpenHands compatibility)
     cat > /etc/eurocopilot/chat-template.jinja <<'JINJA_EOF'
 {%- for message in messages -%}
@@ -911,13 +916,14 @@ EuroCopilot Appliance
 =====================
 
 Sovereign AI coding assistant powered by llama-server (llama.cpp) serving
-Devstral Small 2 24B (Q4_K_M quantization) on CPU. OpenAI-compatible API
+Mistral 7B Instruct (Q4_K_M quantization) on CPU. OpenAI-compatible API
 for aider and other OpenAI clients. Native TLS, Bearer token auth, Prometheus metrics.
 
 Configuration variables (set via OpenNebula context):
-  ONEAPP_COPILOT_AI_MODEL          AI model from catalog (default: Devstral Small 2 24B)
-                                Available: Devstral Small 2 24B, Mistral Small 24B,
-                                Mistral Nemo 12B, Mistral 7B Instruct
+  ONEAPP_COPILOT_AI_MODEL          AI model from catalog (default: Mistral 7B Instruct)
+                                Available: Mistral 7B Instruct (built-in),
+                                Devstral Small 2 24B, Mistral Small 24B, Mistral Nemo 12B
+                                Non-default models are downloaded on first boot.
   ONEAPP_COPILOT_CONTEXT_SIZE   Model context window in tokens (default: 32768)
                                 Valid range: 512-131072 tokens
   ONEAPP_COPILOT_API_PASSWORD        API key / Bearer token (auto-generated sk-... if empty)
@@ -961,7 +967,7 @@ Prometheus metrics:
 Test inference:
   curl -k -H "Authorization: Bearer PASSWORD" https://localhost:8443/v1/chat/completions \
     -H 'Content-Type: application/json' \
-    -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Hello"}]}'
+    -d '{"model":"mistral-7b","messages":[{"role":"user","content":"Hello"}]}'
 
 Password retrieval:
   cat /var/lib/eurocopilot/password
@@ -977,7 +983,7 @@ ACTIVE_MODEL_PATH=""
 ACTIVE_MODEL_ID=""
 
 resolve_model() {
-    local _selection="${ONEAPP_COPILOT_AI_MODEL:-Devstral Small 2 (24B ~14GB built-in)}"
+    local _selection="${ONEAPP_COPILOT_AI_MODEL:-Mistral 7B Instruct (7B ~4GB built-in)}"
 
     # Look up the selection in the catalog
     local _entry="${MODEL_CATALOG[${_selection}]:-}"
@@ -1020,14 +1026,14 @@ resolve_model() {
         log_copilot error "Failed to download model from ${_hf_url}"
         rm -f "${ACTIVE_MODEL_PATH}"
 
-        # Graceful fallback: use built-in Devstral if available
+        # Graceful fallback: use built-in Mistral 7B Instruct if available
         local _fallback="${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}"
         if [ -f "${_fallback}" ]; then
             local _fb_size
             _fb_size=$(stat -c%s "${_fallback}" 2>/dev/null || echo 0)
             if [ "${_fb_size}" -gt 1000000000 ]; then
-                log_copilot warning "Falling back to built-in Devstral (download failed -- check VM internet connectivity)"
-                ACTIVE_MODEL_ID="devstral-small-2"
+                log_copilot warning "Falling back to built-in Mistral 7B Instruct (download failed -- check VM internet connectivity)"
+                ACTIVE_MODEL_ID="mistral-7b"
                 ACTIVE_MODEL_PATH="${_fallback}"
                 _persist_model_info
                 return 0
@@ -1053,7 +1059,7 @@ _persist_model_info() {
 # Load persisted model path/ID (for service_bootstrap, which runs in a separate stage)
 _load_model_info() {
     ACTIVE_MODEL_PATH=$(cat "${LLAMA_DATA_DIR}/model_path" 2>/dev/null || echo "${LLAMA_MODEL_DIR}/${MODEL_GGUF}")
-    ACTIVE_MODEL_ID=$(cat "${LLAMA_DATA_DIR}/model_id" 2>/dev/null || echo "devstral-small-2")
+    ACTIVE_MODEL_ID=$(cat "${LLAMA_DATA_DIR}/model_id" 2>/dev/null || echo "mistral-7b")
 }
 
 # ==========================================================================
@@ -1315,7 +1321,7 @@ smoke_test() {
 
     # Test 2: Non-streaming chat completion
     local _model_id
-    _model_id=$(cat "${LLAMA_DATA_DIR}/model_id" 2>/dev/null || echo "devstral-small-2")
+    _model_id=$(cat "${LLAMA_DATA_DIR}/model_id" 2>/dev/null || echo "mistral-7b")
     local _response
     _response=$(curl -sfk "${_endpoint}/v1/chat/completions" \
         -H "Authorization: Bearer ${_api_key}" \
