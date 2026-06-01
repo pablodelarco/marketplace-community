@@ -4,21 +4,31 @@ require_relative '../../../lib/community/app_handler'
 describe 'Appliance Certification' do
     include_context('vm_handler')
 
-    # Wait for the eurocopilot systemd service to become active.
-    # Built-in Mistral 7B Instruct (~4 GiB) loads in ~30-60s; if a user selected
-    # a larger opt-in model (12B/24B), the first boot has to download it too —
-    # the 600s timeout is generous enough for either path.
-    it 'eurocopilot service is active' do
-        cmd = 'systemctl is-active eurocopilot'
+    # Wait for the appliance to be fully ready, not merely for systemd to report
+    # "active". llama-server binds port 8443 ~5 seconds into boot but then mmaps
+    # the GGUF into RAM and warms up the KV cache, during which time the HTTP
+    # API answers with 503 {"message":"Loading model"}. The one-apps
+    # service_bootstrap step waits for /health to return 200 and only then
+    # writes /etc/one-appliance/config -- so gating on both conditions mirrors
+    # the appliance's own definition of "ready" and makes the rest of the spec
+    # race-free.
+    #
+    # Built-in Mistral 7B Instruct (~4 GiB) loads in ~30-90s on a 2 vCPU /
+    # 8 GiB test VM. Users who select a larger opt-in model (12B / 24B) pay
+    # an additional ~5-10 min for the Hugging Face download on first boot.
+    # The 600 s timeout covers either path with comfortable margin.
+    it 'appliance reaches ready state' do
         start_time = Time.now
         timeout = 600
 
         loop do
-            result = @info[:vm].ssh(cmd)
-            break if result.stdout.strip == 'active'
+            health = @info[:vm].ssh('curl -sk -o /dev/null -w "%{http_code}" https://localhost:8443/health')
+            report = @info[:vm].ssh('test -f /etc/one-appliance/config')
+            break if health.stdout.strip == '200' && report.success?
 
             if Time.now - start_time > timeout
-                raise "eurocopilot service did not become active within #{timeout} seconds"
+                raise "appliance did not reach ready state within #{timeout}s " \
+                      "(last health=#{health.stdout.strip}, report=#{report.success? ? 'present' : 'missing'})"
             end
 
             sleep 10
