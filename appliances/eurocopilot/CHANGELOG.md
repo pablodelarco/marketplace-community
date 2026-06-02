@@ -21,6 +21,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     KV-cache allocation roughly 4x (~4 GiB → ~1 GiB for Mistral 7B). 8192 is
     ample for interactive coding; users on larger VMs can raise it from the
     instantiation wizard.
+  - llama-server now starts with `--alias <model-id>` so the OpenAI
+    `/v1/models` endpoint reports the catalog id (e.g. `mistral-7b`) instead
+    of the raw GGUF path. Aligns the served id with the chat-completion
+    `model` field and the report file.
+  - `wait_for_llama` no longer aborts bootstrap on its readiness timeout; the
+    report file is always written and systemd keeps the service loading, so a
+    slow first boot cannot leave `/etc/one-appliance/config` missing.
+  - A guarded 4 GiB swapfile is enabled before the model starts, giving the
+    KV-cache/compute anon memory a paging backstop on small VMs (best-effort;
+    skipped if it already exists or cannot be created).
 
 ### Changed
 

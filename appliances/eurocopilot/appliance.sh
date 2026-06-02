@@ -609,6 +609,7 @@ ARGS=(
     --host "${LLAMA_HOST}"
     --port "${LLAMA_PORT}"
     --model "${LLAMA_MODEL}"
+    --alias "${LLAMA_ALIAS}"
     --ctx-size "${LLAMA_CTX_SIZE}"
     --threads "${LLAMA_THREADS}"
     --flash-attn on
@@ -827,7 +828,22 @@ service_bootstrap() {
     # 1. Attempt Let's Encrypt before starting llama-server (port 80 is free)
     attempt_letsencrypt
 
-    # 2. Enable and start llama-server (both standalone and LB modes)
+    # 2. Ensure a swap backstop before loading the model. With mlock off the
+    #    GGUF weights are mmap'd and demand-paged, but the KV cache + compute
+    #    graph (~1-2 GiB anon at ctx 8192) cannot be evicted. The marketplace
+    #    certification harness runs the appliance in a generic 'base' VM whose
+    #    RAM we do not control, so a small VM could OOM during model load. A
+    #    guarded swapfile gives the kernel a paging backstop. Best-effort only.
+    if [ ! -f /swapfile ] && ! swapon --show | grep -q '/swapfile'; then
+        { fallocate -l 4G /swapfile \
+            && chmod 600 /swapfile \
+            && mkswap /swapfile \
+            && swapon /swapfile \
+            && log_copilot info "Enabled 4G swap backstop at /swapfile"; } \
+            || log_copilot warning "Could not enable swap backstop (continuing without it)"
+    fi
+
+    # 3. Enable and start llama-server (both standalone and LB modes)
     systemctl enable eurocopilot.service
     systemctl start eurocopilot.service
 
@@ -1195,6 +1211,7 @@ generate_llama_env() {
 LLAMA_HOST=${_host}
 LLAMA_PORT=${_port}
 LLAMA_MODEL=${ACTIVE_MODEL_PATH}
+LLAMA_ALIAS=${ACTIVE_MODEL_ID}
 LLAMA_CTX_SIZE=${ONEAPP_COPILOT_CONTEXT_SIZE}
 LLAMA_THREADS=${_threads}
 LLAMA_SSL_KEY=${_ssl_key}
@@ -1220,8 +1237,13 @@ wait_for_llama() {
         sleep 5
         _elapsed=$((_elapsed + 5))
         if [ "${_elapsed}" -ge "${_timeout}" ]; then
-            log_copilot error "llama-server not ready after ${_timeout}s -- check: journalctl -u eurocopilot"
-            exit 1
+            # Do NOT abort bootstrap: returning lets write_report_file run so
+            # /etc/one-appliance/config always exists. The service keeps loading
+            # under systemd (Restart=on-failure) and /health flips to 200 once
+            # the model finishes. Aborting here would leave the report file
+            # missing and fail readiness checks that gate on it.
+            log_copilot warning "llama-server not ready after ${_timeout}s -- writing report anyway; systemd will keep retrying (journalctl -u eurocopilot)"
+            return 0
         fi
     done
     log_copilot info "llama-server ready (${_elapsed}s)"
