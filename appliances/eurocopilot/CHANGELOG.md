@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [2.8.0] - 2026-05-29
 
+### Fixed
+
+- **Model now loads on a modestly sized VM.** The marketplace certification
+  harness instantiates a generic `base` VM template (it ignores the
+  MEMORY/CPU declared in metadata.yaml), so the appliance must fit a small
+  VM at test time. Two defaults were too aggressive for that:
+  - `--mlock` is now OFF by default. llama.cpp mmaps the GGUF and faults pages
+    in on demand, which lets the model load on a small VM. mlock pinned every
+    page resident and prevented demand-paging, leaving llama-server stuck in
+    "Loading model" (HTTP 503) indefinitely on a memory-constrained VM. mlock
+    is a latency optimization only; turning it off does not affect correctness.
+  - Default context window reduced from 32768 to 8192 tokens, cutting the
+    KV-cache allocation roughly 4x (~4 GiB → ~1 GiB for Mistral 7B). 8192 is
+    ample for interactive coding; users on larger VMs can raise it from the
+    instantiation wizard.
+
 ### Changed
 
 - **Built-in model swapped from Devstral Small 2 24B to Mistral 7B Instruct v0.3.**

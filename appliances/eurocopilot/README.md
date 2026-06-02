@@ -25,7 +25,7 @@ Larger Mistral-family models — [Devstral Small 2](https://mistral.ai/news/devs
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ONEAPP_COPILOT_AI_MODEL` | Mistral 7B Instruct (built-in) | Model selection from catalog (Mistral 7B built-in; Devstral 24B / Mistral Small 24B / Mistral Nemo 12B download on first boot when selected) |
-| `ONEAPP_COPILOT_CONTEXT_SIZE` | 16384 | Context window (tokens) |
+| `ONEAPP_COPILOT_CONTEXT_SIZE` | 8192 | Context window (tokens). Larger values use more KV-cache RAM; raise only on VMs with memory to spare. |
 | `ONEAPP_COPILOT_CPU_THREADS` | 0 (auto) | CPU threads for inference |
 | `ONEAPP_COPILOT_API_PASSWORD` | (auto-generated) | API key / Bearer token |
 | `ONEAPP_COPILOT_TLS_DOMAIN` | (self-signed) | FQDN for Let's Encrypt |

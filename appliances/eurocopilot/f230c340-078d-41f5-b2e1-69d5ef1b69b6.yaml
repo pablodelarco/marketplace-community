@@ -111,7 +111,7 @@ opennebula_template:
     oneapp_copilot_ai_model: >-
       M|list|AI Model|Mistral 7B Instruct (7B ~4GB built-in),Devstral Small 2 (24B ~14GB),Mistral Small Instruct (24B ~14GB),Mistral Nemo Instruct (12B ~7GB)|Mistral 7B Instruct (7B ~4GB built-in)
     oneapp_copilot_context_size: >-
-      O|list|Context Window (tokens)|8192,16384,32768|32768
+      O|list|Context Window (tokens)|8192,16384,32768|8192
     oneapp_copilot_cpu_threads: >-
       O|text|CPU Threads for inference (0 = auto-detect)|0
     oneapp_copilot_api_password: >-

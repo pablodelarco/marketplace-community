@@ -30,7 +30,7 @@ ONE_SERVICE_RECONFIGURABLE=true
 # --------------------------------------------------------------------------
 ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_AI_MODEL'         'configure' 'AI model selection'                          'Mistral 7B Instruct (7B ~4GB built-in)'
-    'ONEAPP_COPILOT_CONTEXT_SIZE'  'configure' 'Model context window in tokens'              '16384'
+    'ONEAPP_COPILOT_CONTEXT_SIZE'  'configure' 'Model context window in tokens'              '8192'
     'ONEAPP_COPILOT_API_PASSWORD'       'configure' 'API key / Bearer token (auto-generated if empty)' ''
     'ONEAPP_COPILOT_TLS_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
     'ONEAPP_COPILOT_CPU_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)'   '0'
@@ -46,7 +46,7 @@ ONE_SERVICE_PARAMS=(
 # Default value assignments
 # --------------------------------------------------------------------------
 ONEAPP_COPILOT_AI_MODEL="${ONEAPP_COPILOT_AI_MODEL:-Mistral 7B Instruct (7B ~4GB built-in)}"
-ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-16384}"
+ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-8192}"
 ONEAPP_COPILOT_API_PASSWORD="${ONEAPP_COPILOT_API_PASSWORD:-}"
 ONEAPP_COPILOT_TLS_DOMAIN="${ONEAPP_COPILOT_TLS_DOMAIN:-}"
 ONEAPP_COPILOT_CPU_THREADS="${ONEAPP_COPILOT_CPU_THREADS:-0}"
@@ -924,8 +924,10 @@ Configuration variables (set via OpenNebula context):
                                 Available: Mistral 7B Instruct (built-in),
                                 Devstral Small 2 24B, Mistral Small 24B, Mistral Nemo 12B
                                 Non-default models are downloaded on first boot.
-  ONEAPP_COPILOT_CONTEXT_SIZE   Model context window in tokens (default: 32768)
-                                Valid range: 512-131072 tokens
+  ONEAPP_COPILOT_CONTEXT_SIZE   Model context window in tokens (default: 8192)
+                                Valid range: 512-131072 tokens. Larger windows
+                                allocate more KV-cache RAM; bump only on VMs
+                                with memory to spare.
   ONEAPP_COPILOT_API_PASSWORD        API key / Bearer token (auto-generated sk-... if empty)
   ONEAPP_COPILOT_TLS_DOMAIN         FQDN for Let's Encrypt certificate (optional)
                                 If empty, self-signed certificate is used
@@ -1170,15 +1172,21 @@ generate_llama_env() {
     local _ssl_key="${LLAMA_CERT_DIR}/key.pem"
     local _ssl_cert="${LLAMA_CERT_DIR}/cert.pem"
 
-    local _mlock="on"
+    # mlock is OFF by default. llama.cpp mmaps the GGUF so pages fault in on
+    # demand; this lets the model load on a modestly sized VM (the marketplace
+    # certification harness instantiates a generic 'base' template, not the
+    # 32 GB template declared in metadata.yaml). mlock would pin every page
+    # resident and prevent demand-paging, hanging model load on a small VM.
+    # It is a latency optimization only; correctness does not depend on it.
+    local _mlock="off"
     if is_lb_mode; then
         _host="127.0.0.1"
         _port="${LLAMA_PORT_LOCAL}"
         _ssl_key=""
         _ssl_cert=""
         _mlock="off"
-        ONEAPP_COPILOT_CONTEXT_SIZE=16384
-        log_copilot info "LB mode: llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (no TLS, ctx=16384, mlock=off)"
+        ONEAPP_COPILOT_CONTEXT_SIZE=8192
+        log_copilot info "LB mode: llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (no TLS, ctx=8192, mlock=off)"
     fi
 
     mkdir -p /etc/eurocopilot
