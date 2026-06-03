@@ -1,0 +1,7 @@
+---
+:tests:
+  :image_name: eurocopilot
+  :type: service
+  :microenvs:
+  - :name: base
+    :variables: {}

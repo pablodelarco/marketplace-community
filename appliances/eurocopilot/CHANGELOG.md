@@ -1,0 +1,227 @@
+# Changelog
+
+All notable changes to the EuroCopilot appliance will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [2.8.0] - 2026-05-29
+
+### Fixed
+
+- **Model now loads on a modestly sized VM.** The marketplace certification
+  harness instantiates a generic `base` VM template (it ignores the
+  MEMORY/CPU declared in metadata.yaml), so the appliance must fit a small
+  VM at test time. Two defaults were too aggressive for that:
+  - `--mlock` is now OFF by default. llama.cpp mmaps the GGUF and faults pages
+    in on demand, which lets the model load on a small VM. mlock pinned every
+    page resident and prevented demand-paging, leaving llama-server stuck in
+    "Loading model" (HTTP 503) indefinitely on a memory-constrained VM. mlock
+    is a latency optimization only; turning it off does not affect correctness.
+  - Default context window reduced from 32768 to 8192 tokens, cutting the
+    KV-cache allocation roughly 4x (~4 GiB → ~1 GiB for Mistral 7B). 8192 is
+    ample for interactive coding; users on larger VMs can raise it from the
+    instantiation wizard.
+  - llama-server now starts with `--alias <model-id>` so the OpenAI
+    `/v1/models` endpoint reports the catalog id (e.g. `mistral-7b`) instead
+    of the raw GGUF path. Aligns the served id with the chat-completion
+    `model` field and the report file.
+  - `wait_for_llama` no longer aborts bootstrap on its readiness timeout; the
+    report file is always written and systemd keeps the service loading, so a
+    slow first boot cannot leave `/etc/one-appliance/config` missing.
+  - A guarded 4 GiB swapfile is enabled before the model starts, giving the
+    KV-cache/compute anon memory a paging backstop on small VMs (best-effort;
+    skipped if it already exists or cannot be created).
+
+### Changed
+
+- **Built-in model swapped from Devstral Small 2 24B to Mistral 7B Instruct v0.3.**
+  Devstral, Mistral Small Instruct 24B, and Mistral Nemo Instruct 12B remain
+  selectable from the OpenNebula instantiation wizard and download from Hugging
+  Face on first boot when selected. The qcow2 image drops from ~15 GiB to
+  ~6 GiB, which makes the marketplace `CLONING` step finish well inside the
+  community-distro test framework's 180-second deploy timeout. Users who want
+  Devstral can pick it from the dropdown at instantiation time — the appliance
+  fetches it on first boot (~5-10 min on a 1 Gbps link) and persists the
+  selection across reboots.
+- Default VM resources for the built-in Mistral 7B are now 4 vCPU / 8 GB; the
+  template still recommends 16 vCPU / 32 GB for users who select a 12B+ model.
+- Graceful-fallback chain now falls back to built-in Mistral 7B Instruct when
+  a runtime download fails (was: built-in Devstral).
+
+## [2.7.0] - 2026-03-16
+
+### Fixed
+
+- Custom Jinja chat template for Devstral: fixes token leakage (`<s>`, `[INST]`
+  markers) and OpenHands role alternation errors (`Conversation roles must
+  alternate user/assistant`). Template enforces strict user/assistant alternation
+  with proper `[INST]`/`[/INST]` wrapping.
+
+### Changed
+
+- `--parallel 1` flag for llama-server: prevents CPU contention from concurrent
+  request processing, yielding ~2x speed boost on single-request workloads.
+- Default context size reduced from 32768 to 16384 tokens. Halves memory
+  pressure and KV cache allocation while remaining sufficient for most coding
+  tasks.
+- LiteLLM proxy timeouts increased to 600s (request) and 120s (health check)
+  to accommodate slow CPU inference without premature timeouts.
+
+## [2.6.0] - 2026-03-15
+
+### Fixed
+
+- Cross-site routes now use a netplan drop-in (`60-cross-site.yaml`) that survives
+  reboots and works regardless of whether the VR is reachable at boot time. Replaces
+  the fragile ping-gated `ip route replace` approach.
+- Corrected cross-site CIDR from /21 (invalid, silently masked to 96-103) to /20
+  (covers all site subnets 101-109).
+- Standalone mode cleanup removes cross-site netplan drop-in when switching from
+  LB mode.
+
+### Changed
+
+- LB mode local llama-server restored with reduced footprint (ctx_size=8192,
+  mlock=off) for co-located inference alongside LiteLLM proxy.
+- REGISTER_SITE_NAME context variable for friendly LB backend IDs
+  (e.g. `devstral-small-2-poland0` instead of `devstral-small-2-<uuid>`).
+
+### Notes
+
+- VM templates MUST include `CPU_MODEL=[MODEL="host-passthrough"]` for usable
+  inference performance. Without it, QEMU exposes a generic CPU (SSE2 only),
+  resulting in ~20x slower inference.
+
+## [2.3.0] - 2026-03-07
+
+### Changed
+
+- Auto-generated API keys now use `sk-` prefix (OpenAI convention) with 48 random
+  characters (51 chars total), replacing the previous 16-char bare hex tokens.
+
+### Fixed
+
+- SSH welcome banner now shows the local IP address instead of the public IP.
+- Removed aider reference from banner; API key shown in Web UI login instructions.
+- System users (eurocopilot, litellm, postgres) are created during packer build
+  to prevent UID/GID conflicts at runtime.
+
+### Added
+
+- ONEAPP_COPILOT_REGISTER_MODEL_NAME context variable: override the model name
+  used when auto-registering with a remote LB (e.g. `devstral-small-2-poland`).
+- Persistent cross-site routes via VR for LB mode: backend VMs automatically add
+  static routes to reach other site subnets through the local Virtual Router.
+
+## [2.2.0] - 2026-03-04
+
+### Added
+
+- Zero-touch auto-registration: standalone VMs can automatically register as
+  backends in a remote LiteLLM load balancer on boot and deregister on shutdown.
+  Configure via ONEAPP_COPILOT_LB_URL and ONEAPP_COPILOT_LB_MASTER_KEY.
+- Systemd deregistration service ensures clean removal from LB on VM shutdown/reboot.
+
+## [2.1.1] - 2026-03-04
+
+### Changed
+
+- Replaced model catalog: removed base/completion-only models (Codestral 22B v0.1,
+  Codestral Mamba 7B) that lack chat templates. New instruct-only catalog:
+  Devstral Small 2 (24B, built-in), Mistral Small Instruct (24B),
+  Mistral Nemo Instruct (12B), Mistral 7B Instruct (7B).
+  Each entry now shows parameter count and approximate GGUF size.
+
+### Fixed
+
+- Removed commas from model list display names to prevent OpenNebula
+  user_inputs list parser from splitting them into separate entries.
+
+### Fixed
+
+- Added `stop: ["<|im_end|>"]` to LiteLLM backend configs to prevent ChatML stop
+  tokens from leaking into responses when routing through the load balancer.
+- Added `STORE_MODEL_IN_DB: "True"` to LiteLLM environment to enable adding and
+  removing models from the Web UI.
+
+### Notes
+
+- When connecting from clients that validate TLS certificates (e.g. OpenHands with
+  httpx/litellm), the self-signed certificate will be rejected. Use a valid TLS
+  certificate: configure Let's Encrypt via ONEAPP_COPILOT_TLS_DOMAIN, or expose the
+  endpoint through a TLS-terminating proxy with a trusted certificate (e.g. Tailscale
+  Funnel, Cloudflare Tunnel, or a reverse proxy with a CA-signed cert).
+
+## [2.1.0] - 2026-02-25
+
+### Added
+
+- Optional LiteLLM load balancing across multiple EuroCopilot VMs via ONEAPP_COPILOT_LB_BACKENDS
+- Least-busy routing, automatic failover (2 fails = 30s cooldown), and cross-site distribution
+- LiteLLM proxy systemd unit (eurocopilot-proxy.service) with TLS and master_key auth
+- LiteLLM Web UI (${endpoint}/ui) for monitoring traffic, managing backends, creating API keys, and setting budgets
+- PostgreSQL database for LiteLLM Web UI persistence (auto-provisioned in LB mode)
+- Mode-switch cleanup: switching between standalone and LB mode across reboots is safe
+- Let's Encrypt renewal hook restarts LiteLLM proxy when active
+
+## [2.0.0] - 2026-02-23
+
+### Changed
+
+- Replaced Ollama + Nginx with bare llama-server (llama.cpp) as inference backend
+- 30-50% better throughput with direct llama-server, smaller footprint (~90MB binary vs ~200MB+ Ollama)
+- Native TLS, API key auth, CORS, and Prometheus metrics in llama-server (no reverse proxy needed)
+- Bearer token authentication replaces basic auth (no username, API key only)
+- Port changed from 443 to 8443 (llama-server direct HTTPS)
+- Compiled with GGML_CPU_ALL_VARIANTS for automatic SIMD detection (SSE3/AVX/AVX2/AVX-512)
+- CPU tuning: mlock, flash-attn, thread pinning, process priority
+- Model GGUF baked directly into image from Hugging Face (no Ollama registry dependency)
+- certbot standalone mode for Let's Encrypt (port 80 is free without nginx)
+- Systemd unit name changed from ollama/nginx to eurocopilot
+
+### Added
+
+- ONEAPP_COPILOT_AI_MODEL context variable for model selection from catalog
+- Built-in Prometheus metrics endpoint (/metrics)
+- Native health endpoint (/health)
+
+### Removed
+
+- Ollama inference wrapper and its registry dependency
+- Nginx reverse proxy (TLS, auth, CORS now handled natively by llama-server)
+- apache2-utils (htpasswd) dependency
+- Port 80 HTTP redirect (only used temporarily for ACME challenge)
+- Port 11434 Ollama API (replaced by direct llama-server on 8443)
+
+## [1.1.0] - 2026-02-20
+
+### Changed
+
+- Replaced LocalAI with Ollama as inference backend (2x speed improvement: 3.9 -> 7.5 tok/s)
+- Ollama ships AVX-512 optimized llama.cpp, eliminating manual backend compilation
+- Systemd management via drop-in override instead of custom unit file
+- Model configuration via Ollama Modelfile instead of LocalAI YAML
+- Ollama installer manages its own system user and service unit
+
+### Removed
+
+- LocalAI binary download and llama-cpp backend installation
+- Custom system user/group creation (Ollama installer handles this)
+- GGUF file download (Ollama pulls models from its own registry)
+- Custom systemd unit file generation
+
+## [1.0.0] - 2026-02-16
+
+### Added
+
+- Initial release of EuroCopilot appliance
+- Devstral Small 2 24B (Q4_K_M) served by LocalAI v3.11.0 on CPU
+- OpenAI-compatible API (chat completions with streaming)
+- HTTPS reverse proxy with nginx and self-signed TLS
+- Optional Let's Encrypt integration via ONEAPP_COPILOT_DOMAIN
+- Basic authentication with auto-generated or user-supplied password
+- Report file with connection details and aider setup guide
+- SSH login banner with service status
+- Configurable context variables: ONEAPP_COPILOT_AI_MODEL, ONEAPP_COPILOT_CONTEXT_SIZE, ONEAPP_COPILOT_CPU_THREADS, ONEAPP_COPILOT_API_PASSWORD, ONEAPP_COPILOT_TLS_DOMAIN
+- Build-time model pre-warming with smoke tests
+- Packer HCL2 build pipeline with cloud-init bootstrap
