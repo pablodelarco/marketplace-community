@@ -49,33 +49,34 @@ describe 'Appliance Certification' do
         expect(result.stdout.strip).to eq('200')
     end
 
-    # Root endpoint requires authentication (401 without bearer).
-    it 'returns 401 on / without auth' do
-        cmd = 'curl -sk -o /dev/null -w "%{http_code}" https://localhost:8443/'
+    # A protected endpoint must reject unauthenticated requests with 401.
+    # In llama.cpp b8133 GET / is a hard-coded public route (serves the WebUI)
+    # and always returns 200, so auth is asserted on /v1/chat/completions, which
+    # is genuinely protected. llama-server validates the api-key BEFORE parsing
+    # the body, so a request with no Authorization header returns 401 regardless
+    # of the (here empty {}) payload.
+    it 'returns 401 on /v1/chat/completions without auth' do
+        cmd = %q(curl -sk -o /dev/null -w \"%{http_code}\" -H \"Content-Type: application/json\" -d '{}' https://localhost:8443/v1/chat/completions)
         result = @info[:vm].ssh(cmd)
         expect(result.stdout.strip).to eq('401')
     end
 
     # The models endpoint lists the bundled Mistral 7B Instruct model.
+    # Runner-shell escaping (VM.ssh wraps the command in double quotes): \$ defers
+    # the cat to the VM so the real key is read on the appliance, and \" keeps the
+    # Authorization header a single argument.
     it 'lists the mistral-7b model' do
-        cmd = %q(
-            password=$(cat /var/lib/eurocopilot/password)
-            curl -sk -H "Authorization: Bearer ${password}" https://localhost:8443/v1/models
-        )
+        cmd = %q(curl -sk -H \"Authorization: Bearer \$(cat /var/lib/eurocopilot/password)\" https://localhost:8443/v1/models)
         result = @info[:vm].ssh(cmd)
         expect(result.exitstatus).to eq(0)
         expect(result.stdout).to include('mistral-7b')
     end
 
-    # Chat completion returns a non-empty response.
+    # Chat completion returns a non-empty response. Same runner-shell escaping as
+    # above: \$ defers $(cat .../password) to the VM (proven byte-identical to the
+    # server's --api-key) and \" keeps the single -H value and JSON body intact.
     it 'completes a chat request' do
-        cmd = %q(
-            password=$(cat /var/lib/eurocopilot/password)
-            curl -sk -H "Authorization: Bearer ${password}" \
-                 -H "Content-Type: application/json" \
-                 -d '{"model":"mistral-7b","messages":[{"role":"user","content":"Say hello"}],"max_tokens":5}' \
-                 https://localhost:8443/v1/chat/completions
-        )
+        cmd = %q(curl -sk -H \"Authorization: Bearer \$(cat /var/lib/eurocopilot/password)\" -H \"Content-Type: application/json\" -d '{\"model\":\"mistral-7b\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}],\"max_tokens\":5}' https://localhost:8443/v1/chat/completions)
         result = @info[:vm].ssh(cmd)
         expect(result.exitstatus).to eq(0)
         expect(result.stdout).to include('"choices"')
