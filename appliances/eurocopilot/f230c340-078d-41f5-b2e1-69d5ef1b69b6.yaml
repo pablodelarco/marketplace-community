@@ -133,11 +133,11 @@ opennebula_template:
 logo: eurocopilot.png
 images:
   - name: eurocopilot_os
-    url: 'https://PUBLISH_URL/eurocopilot-2.8.0.qcow2'
+    url: 'https://d38nm155miqkyg.cloudfront.net/eurocopilot-2.8.0.qcow2'
     type: OS
     dev_prefix: vd
     driver: qcow2
-    size: 64424509440
+    size: 5553520640
     checksum:
-      md5: bf6e0be9b3aed527c41ed2cc73c1560c
-      sha256: c6a1b7c93a20116690c0ee838dab76304b1bcff8d9eb984cb328d31f6eada1db
+      md5: 75f3b04d4709c5b9dc9da88b3f76b60c
+      sha256: 1a7d9752413804d8ca96e64e272d1e96ac2fb677cc8866f5fab40b04e885f084
