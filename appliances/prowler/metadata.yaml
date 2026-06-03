@@ -1,0 +1,47 @@
+---
+:app:
+  :name: prowler
+  :type: service
+  :os:
+    :type: linux
+    :base: ubuntu2404
+  :hypervisor: KVM
+  :context:
+    :prefixed: true
+    :params:
+      :ONEAPP_PROWLER_SCAN_PROVIDER: 'aws'
+      :ONEAPP_PROWLER_SCAN_CREDENTIALS: ''
+      :ONEAPP_PROWLER_SCAN_REGION: ''
+      :ONEAPP_PROWLER_SCAN_COMPLIANCE: ''
+      :ONEAPP_PROWLER_SCAN_TOKEN: ''
+      :ONEAPP_PROWLER_SCAN_CLOUDURL: ''
+      :ONEAPP_PROWLER_SCAN_ONBOOT: 'YES'
+      :ONEAPP_PROWLER_SCAN_SCHEDULE: 'daily'
+      :ONEAPP_PROWLER_SCAN_SSHKEY: ''
+
+:one:
+  :template:
+    NAME: base
+    TEMPLATE:
+      ARCH: x86_64
+      CONTEXT:
+        NETWORK: 'YES'
+        SET_HOSTNAME: "$NAME"
+        SSH_PUBLIC_KEY: "$USER[SSH_PUBLIC_KEY]"
+      CPU: '1'
+      CPU_MODEL:
+        MODEL: host-passthrough
+      GRAPHICS:
+        LISTEN: 0.0.0.0
+        TYPE: vnc
+      MEMORY: '1024'
+      NIC:
+        NETWORK: service
+      NIC_DEFAULT:
+        MODEL: virtio
+  :datastore_name: default
+  :timeout: '600'
+
+:infra:
+  :disk_format: qcow2
+  :apps_path: /var/tmp

@@ -1,0 +1,109 @@
+---
+name: Service Prowler
+version: 1.0.0-2
+one-apps_version: 7.0.0-0
+publisher: OpenNebula Community
+publisher_email: community@opennebula.io
+description: |-
+  [Prowler](https://github.com/prowler-cloud/prowler) is the most widely
+  used open-source cloud security platform. This appliance ships the
+  upstream **Prowler CLI** on a bastion-hardened Ubuntu 24.04 base,
+  intended for automated multi-cloud security and compliance scanning.
+
+  **Capabilities**
+  - 500+ security checks for AWS, Azure, GCP, Kubernetes, and Microsoft 365
+  - Compliance frameworks: CIS, NIST 800-53, NIST CSF, PCI-DSS, HIPAA,
+    GDPR, SOC2, FedRAMP, ENS (Spanish National Security Scheme), and more
+  - HTML / CSV / JSON / OCSF / ASFF report output
+  - Recurring scans via a systemd timer (default: daily 03:00)
+
+  **What is included**
+  - Ubuntu 24.04 LTS (server, minimal package set)
+  - Prowler CLI installed via pipx for the non-root `prowler` user
+  - `prowler-scan` and `prowler-status` helper commands
+  - Systemd `prowler-scan.timer` for periodic scans
+  - Cloud-provider credentials injected at instantiation via OpenNebula
+    contextualization (no credentials baked into the image)
+  - Optional **Prowler Cloud / Prowler App** integration: when a SaaS API
+    key is provided via `ONEAPP_PROWLER_SCAN_TOKEN`, every scan is
+    pushed to `https://api.prowler.com/api/v1/ingestions` (or to a
+    self-hosted Prowler App via `ONEAPP_PROWLER_CLOUD_API_BASE_URL`) so
+    findings appear in the central dashboard
+
+  **Bastion hardening applied by default**
+  - Non-root default user `prowler` (UID 1000, NOPASSWD sudo)
+  - Root account locked, `PermitRootLogin no`
+  - SSH key-only auth, `AllowUsers prowler`, `MaxAuthTries 3`
+  - UFW firewall: deny incoming, allow 22/tcp only
+  - fail2ban watching sshd
+  - Unattended security upgrades enabled
+  - Kernel sysctl hardening (rp_filter, kptr_restrict, ptrace_scope, ...)
+  - auditd with CIS-aligned identity / sudo / sshd watches
+  - Password policy via pam_pwquality (minlen 14, three character classes)
+
+  **Documentation**
+  - [Prowler CLI docs](https://docs.prowler.com/projects/prowler-open-source/en/latest/)
+  - [Prowler GitHub](https://github.com/prowler-cloud/prowler)
+  - [Appliance README](https://github.com/OpenNebula/marketplace-community/blob/master/appliances/prowler/README.md)
+
+short_description: Prowler cloud security CLI on a hardened Ubuntu 24.04 base
+tags:
+- prowler
+- security
+- compliance
+- cloud-security
+- bastion
+- aws
+- azure
+- gcp
+- kubernetes
+- ubuntu
+- service
+format: qcow2
+creation_time: 1771455600
+os-id: Ubuntu
+os-release: '24.04 LTS'
+os-arch: x86_64
+hypervisor: KVM
+opennebula_version: 6.10, 7.0
+opennebula_template:
+  context:
+    network: 'YES'
+    token: 'YES'
+    report_ready: 'YES'
+    set_hostname: "$NAME"
+    ssh_public_key: "$USER[SSH_PUBLIC_KEY]"
+    oneapp_prowler_scan_token: "$ONEAPP_PROWLER_SCAN_TOKEN"
+  cpu: '1'
+  vcpu: '1'
+  graphics:
+    listen: 0.0.0.0
+    type: vnc
+  memory: '1024'
+  os:
+    arch: x86_64
+  user_inputs:
+    oneapp_prowler_scan_token: "O|password|Prowler Cloud API key (optional)"
+  inputs_order: >-
+    ONEAPP_PROWLER_SCAN_TOKEN
+  user_inputs_metadata:
+  - name: PROWLER
+    type: APP
+    title: Prowler
+  - name: SCAN
+    type: GROUP
+    title: Optional integrations
+    description: Push scan results to cloud.prowler.com (optional).
+logo: logos/prowler.png
+
+images:
+- name: service_prowler
+  url: >-
+    https://d38nm155miqkyg.cloudfront.net/service_prowler-1.0.0-2.qcow2
+  type: OS
+  dev_prefix: vd
+  driver: qcow2
+  size: 1386676224
+  checksum:
+    md5: f7fcee7f707de94811978cba902dda6c
+    sha256: 1914a6de652f7ada8a8f170eb9d3a025fd499c2cc7e03c34af6f50b613392309
