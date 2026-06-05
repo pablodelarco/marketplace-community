@@ -8,48 +8,29 @@
 #   5. Rename this file to a UUID for marketplace PR: cp marketplace.yaml $(uuidgen).yaml
 #
 ---
-name: EuroCopilot 2.8.0
-version: 2.8.0
+name: EuroCopilot
+version: '1.0'
 publisher: OpenNebula Systems
 description: |-
-  One-click sovereign AI coding assistant powered by
-  [Mistral 7B Instruct](https://mistral.ai/news/announcing-mistral-7b) (7B, Mistral AI)
-  running on CPU via [llama.cpp](https://github.com/ggerganov/llama.cpp). Not all
-  AI needs GPU -- this 7B parameter model delivers practical coding assistance on
-  any 8 GB VM with 4+ vCPUs. Import, instantiate, code.
+  [EuroCopilot](https://github.com/pablodelarco/one-apps-eurocopilot) is an
+  AI coding assistant that serves an open-source LLM over an
+  OpenAI-compatible HTTPS API. It runs
+  [Mistral 7B Instruct](https://mistral.ai/news/announcing-mistral-7b) on CPU via
+  [llama.cpp](https://github.com/ggerganov/llama.cpp), so a GPU is optional, and
+  the built-in model fits on a small 4+ vCPU / 8 GB VM. Larger Mistral models
+  (Devstral Small 2, Mistral Small, Mistral Nemo) are opt-in from the
+  instantiation wizard and download on first boot.
 
-  **Opt-in upgrades:** [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B),
-  [Mistral Small Instruct](https://mistral.ai/news/mistral-small-3) (24B), and
-  [Mistral Nemo Instruct](https://mistral.ai/news/mistral-nemo) (12B) can be
-  selected from the OpenNebula instantiation wizard and download from Hugging
-  Face on first boot. Recommended VM: 16+ vCPU / 32 GB RAM for 24B models.
+  Two modes are supported: standalone inference on a single VM with llama.cpp,
+  or a load-balanced pool where a [LiteLLM](https://litellm.ai) proxy spreads
+  requests across several VMs. The pool pairs naturally with OpenNebula's native
+  federation to scale a shared copilot across zones and edge sites.
 
-  **European Sovereign AI** -- 100% open-source stack built by European
-  companies: Mistral AI (Paris) for the models, OpenNebula (Madrid) for
-  the cloud platform. 100% sovereign: your code stays in your jurisdiction,
-  your data never leaves your infrastructure. All components under
-  Apache 2.0 license.
-
-  Connect with [aider](https://aider.chat) or any OpenAI-compatible client for
-  AI-assisted coding: code analysis, refactoring, test generation, bug fixes.
-  One-click deployment from the OpenNebula marketplace to a running copilot
-  in minutes.
-
-  **Features:**
-  - OpenAI-compatible API (chat completions with streaming)
-  - Native HTTPS with auto-generated TLS certificate (no reverse proxy needed)
-  - Optional Let's Encrypt for production domains
-  - Bearer token authentication with auto-generated API keys
-  - Built-in Prometheus metrics endpoint (/metrics)
-  - CPU-tuned inference (mlock, flash-attn, thread pinning, SIMD auto-detect)
-  - Fully configurable via OpenNebula context variables
-  - Report file with connection details and aider setup guide
-  - Idempotent reconfiguration on every boot
-  - Optional LiteLLM load balancing across multiple VMs for team use
+  Connect aider, Continue, Cline, or any OpenAI-compatible client with a bearer
+  token, and keep your code and data on your own infrastructure.
 short_description: >-
-  Sovereign AI coding copilot (Mistral 7B Instruct on CPU via llama.cpp;
-  Devstral 24B and Mistral 12B/24B opt-in). No GPU required. European
-  open-source. One-click deployment.
+  AI coding assistant serving a Mistral LLM over an OpenAI-compatible
+  API, on CPU with GPU optional.
 tags:
   - ai
   - llm
