@@ -1,52 +1,30 @@
 ---
-name: Service Prowler
-version: 1.0.0-2
+name: Prowler CLI
+version: '1.0'
 one-apps_version: 7.0.0-0
 publisher: OpenNebula Community
 publisher_email: community@opennebula.io
 description: |-
-  [Prowler](https://github.com/prowler-cloud/prowler) is the most widely
-  used open-source cloud security platform. This appliance ships the
-  upstream **Prowler CLI** on a bastion-hardened Ubuntu 24.04 base,
-  intended for automated multi-cloud security and compliance scanning.
+  [Prowler](https://github.com/prowler-cloud/prowler) is the most widely used
+  open-source cloud security and compliance scanner. This appliance ships the
+  [Prowler CLI](https://docs.prowler.com/projects/prowler-open-source/en/latest/)
+  on a hardened Ubuntu 24.04 LTS bastion, ready to audit AWS, Azure, GCP,
+  Kubernetes and Microsoft 365 from a single VM.
 
-  **Capabilities**
-  - 500+ security checks for AWS, Azure, GCP, Kubernetes, and Microsoft 365
-  - Compliance frameworks: CIS, NIST 800-53, NIST CSF, PCI-DSS, HIPAA,
-    GDPR, SOC2, FedRAMP, ENS (Spanish National Security Scheme), and more
-  - HTML / CSV / JSON / OCSF / ASFF report output
-  - Recurring scans via a systemd timer (default: daily 03:00)
+  Prowler runs more than 500 controls mapped to frameworks like CIS, NIST,
+  PCI-DSS, HIPAA, GDPR, SOC2, FedRAMP and the Spanish ENS, and exports
+  findings as HTML, CSV, JSON, OCSF or ASFF. Cloud credentials are injected
+  at instantiation through OpenNebula contextualization (no secrets baked
+  into the image), and a systemd timer runs a daily scan out of the box.
 
-  **What is included**
-  - Ubuntu 24.04 LTS (server, minimal package set)
-  - Prowler CLI installed via pipx for the non-root `prowler` user
-  - `prowler-scan` and `prowler-status` helper commands
-  - Systemd `prowler-scan.timer` for periodic scans
-  - Cloud-provider credentials injected at instantiation via OpenNebula
-    contextualization (no credentials baked into the image)
-  - Optional **Prowler Cloud / Prowler App** integration: when a SaaS API
-    key is provided via `ONEAPP_PROWLER_SCAN_TOKEN`, every scan is
-    pushed to `https://api.prowler.com/api/v1/ingestions` (or to a
-    self-hosted Prowler App via `ONEAPP_PROWLER_CLOUD_API_BASE_URL`) so
-    findings appear in the central dashboard
-
-  **Bastion hardening applied by default**
-  - Non-root default user `prowler` (UID 1000, NOPASSWD sudo)
-  - Root account locked, `PermitRootLogin no`
-  - SSH key-only auth, `AllowUsers prowler`, `MaxAuthTries 3`
-  - UFW firewall: deny incoming, allow 22/tcp only
-  - fail2ban watching sshd
-  - Unattended security upgrades enabled
-  - Kernel sysctl hardening (rp_filter, kptr_restrict, ptrace_scope, ...)
-  - auditd with CIS-aligned identity / sudo / sshd watches
-  - Password policy via pam_pwquality (minlen 14, three character classes)
-
-  **Documentation**
-  - [Prowler CLI docs](https://docs.prowler.com/projects/prowler-open-source/en/latest/)
-  - [Prowler GitHub](https://github.com/prowler-cloud/prowler)
-  - [Appliance README](https://github.com/OpenNebula/marketplace-community/blob/master/appliances/prowler/README.md)
-
-short_description: Prowler cloud security CLI on a hardened Ubuntu 24.04 base
+  SSH in as `prowler` and run `prowler-scan <aws|azure|gcp|kubernetes|m365>`
+  to launch an on-demand audit. Provide a
+  [Prowler Cloud](https://cloud.prowler.com) API key from the instantiation
+  wizard to push results to the central dashboard, or keep everything local
+  on the VM.
+short_description: >-
+  Open-source multi-cloud security and compliance scanner for AWS, Azure,
+  GCP, Kubernetes and Microsoft 365.
 tags:
 - prowler
 - security
