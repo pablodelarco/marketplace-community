@@ -16,7 +16,7 @@ description: |-
   sovereign AI coding assistant that serves an open-source LLM over an
   OpenAI-compatible HTTPS API. It runs
   [Mistral 7B Instruct](https://mistral.ai/news/announcing-mistral-7b) on CPU via
-  [llama.cpp](https://github.com/ggerganov/llama.cpp), so no GPU is required, and
+  [llama.cpp](https://github.com/ggerganov/llama.cpp), so a GPU is optional, and
   the built-in model fits on a small 4+ vCPU / 8 GB VM. Larger Mistral models
   (Devstral Small 2, Mistral Small, Mistral Nemo) are opt-in from the
   instantiation wizard and download on first boot.
