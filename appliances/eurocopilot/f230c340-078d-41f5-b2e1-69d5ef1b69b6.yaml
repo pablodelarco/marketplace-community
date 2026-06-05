@@ -12,8 +12,8 @@ name: EuroCopilot
 version: 2.8.0
 publisher: OpenNebula Systems
 description: |-
-  Appliance with preinstalled [EuroCopilot](https://github.com/pablodelarco/one-apps-eurocopilot),
-  a sovereign AI coding assistant that serves an open-source LLM over an
+  [EuroCopilot](https://github.com/pablodelarco/one-apps-eurocopilot) is a
+  sovereign AI coding assistant that serves an open-source LLM over an
   OpenAI-compatible HTTPS API. It runs
   [Mistral 7B Instruct](https://mistral.ai/news/announcing-mistral-7b) on CPU via
   [llama.cpp](https://github.com/ggerganov/llama.cpp), so no GPU is required, and
