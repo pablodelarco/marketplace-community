@@ -12,8 +12,8 @@ name: EuroCopilot
 version: '1.0'
 publisher: OpenNebula Systems
 description: |-
-  [EuroCopilot](https://github.com/pablodelarco/one-apps-eurocopilot) is a
-  sovereign AI coding assistant that serves an open-source LLM over an
+  [EuroCopilot](https://github.com/pablodelarco/one-apps-eurocopilot) is an
+  AI coding assistant that serves an open-source LLM over an
   OpenAI-compatible HTTPS API. It runs
   [Mistral 7B Instruct](https://mistral.ai/news/announcing-mistral-7b) on CPU via
   [llama.cpp](https://github.com/ggerganov/llama.cpp), so a GPU is optional, and
@@ -24,8 +24,8 @@ description: |-
   Connect aider, Continue, Cline, or any OpenAI-compatible client with a bearer
   token, and keep your code and data on your own infrastructure.
 short_description: >-
-  Sovereign AI coding assistant serving a Mistral LLM over an OpenAI-compatible
-  API, on CPU with no GPU required.
+  AI coding assistant serving a Mistral LLM over an OpenAI-compatible
+  API, on CPU with GPU optional.
 tags:
   - ai
   - llm
