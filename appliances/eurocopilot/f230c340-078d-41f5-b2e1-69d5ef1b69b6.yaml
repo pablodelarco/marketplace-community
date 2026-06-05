@@ -9,7 +9,7 @@
 #
 ---
 name: EuroCopilot
-version: 2.8.0
+version: '1.0'
 publisher: OpenNebula Systems
 description: |-
   [EuroCopilot](https://github.com/pablodelarco/one-apps-eurocopilot) is a
