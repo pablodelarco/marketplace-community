@@ -4,6 +4,39 @@ All notable changes to the Mistral Copilot appliance will be documented in this 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.9.0] - 2026-06-16
+
+### Security
+
+- **SSH hardened in the shipped image.** `PasswordAuthentication no` and
+  `PermitRootLogin without-password` (key-only via the contextualized
+  `SSH_PUBLIC_KEY`), and `USERNAME_PASSWORD_RESET: 'YES'` in the deploy context,
+  so the build-time password can never reach a deployed VM.
+- **Per-role secrets.** The inference API key, LB master key, Web UI password,
+  and PostgreSQL password are now distinct random secrets (0600). A leak of one
+  (e.g. an inference key harvested from a backend) no longer yields the others.
+- **Auto-registration no longer trusts the network blindly.** The register URL
+  must be `https://`, TLS is verified by default (system CAs, or a supplied
+  internal CA via `ONEAPP_COPILOT_TLS_CA`), and only an explicit
+  `ONEAPP_COPILOT_REGISTER_INSECURE=YES` permits an unverified self-signed LB.
+  Credentials are never sent over an unverified channel by default.
+- **LiteLLM management routes locked down.** `admin_only_routes` restricts
+  `/model/*` and `/key/*` to the master key, and `ssl_verify` pins to the
+  internal CA bundle when one is provided.
+- **Supply-chain pinning.** llama.cpp is pinned to a verified commit (the build
+  fails if the tag moves), every model GGUF is SHA256-verified after download
+  (fail-closed), and the LiteLLM/prisma/nodeenv versions are pinned.
+- **Host firewall.** Default-deny inbound except SSH (22), the API/UI port
+  (8443), and ACME http-01 (80); outbound SMTP is blocked so a compromised
+  workload cannot send unsolicited mail (limits blast radius).
+- **Injection hardening.** LB registration/deregistration/health-check request
+  bodies are built with `jq`; context secrets and register identifiers are
+  charset-validated; generated helper scripts are `chmod 700` and read their
+  keys at runtime instead of having them templated in.
+- Added `ONEAPP_COPILOT_TLS_EMAIL` for Let's Encrypt account registration, and
+  the endpoint IP is now derived from OneGate/the local NIC rather than
+  third-party IP-echo services.
+
 ## [2.8.0] - 2026-05-29
 
 ### Fixed

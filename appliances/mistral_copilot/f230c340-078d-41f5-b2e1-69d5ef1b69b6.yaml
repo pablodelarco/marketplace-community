@@ -52,6 +52,7 @@ opennebula_version: 6.10, 7.0
 opennebula_template:
   CONTEXT:
     NETWORK: 'YES'
+    USERNAME_PASSWORD_RESET: 'YES'
     SSH_PUBLIC_KEY: "$USER[SSH_PUBLIC_KEY]"
     ONEAPP_COPILOT_AI_MODEL: '$ONEAPP_COPILOT_AI_MODEL'
     ONEAPP_COPILOT_CONTEXT_SIZE: '$ONEAPP_COPILOT_CONTEXT_SIZE'
@@ -64,6 +65,9 @@ opennebula_template:
     ONEAPP_COPILOT_REGISTER_KEY: '$ONEAPP_COPILOT_REGISTER_KEY'
     ONEAPP_COPILOT_REGISTER_MODEL_NAME: '$ONEAPP_COPILOT_REGISTER_MODEL_NAME'
     ONEAPP_COPILOT_REGISTER_SITE_NAME: '$ONEAPP_COPILOT_REGISTER_SITE_NAME'
+    ONEAPP_COPILOT_TLS_EMAIL: '$ONEAPP_COPILOT_TLS_EMAIL'
+    ONEAPP_COPILOT_TLS_CA: '$ONEAPP_COPILOT_TLS_CA'
+    ONEAPP_COPILOT_REGISTER_INSECURE: '$ONEAPP_COPILOT_REGISTER_INSECURE'
   CPU: '16'
   VCPU: '16'
   CPU_MODEL:
@@ -82,8 +86,11 @@ opennebula_template:
     ONEAPP_COPILOT_CPU_THREADS,
     ONEAPP_COPILOT_API_PASSWORD,
     ONEAPP_COPILOT_TLS_DOMAIN,
+    ONEAPP_COPILOT_TLS_EMAIL,
+    ONEAPP_COPILOT_TLS_CA,
     ONEAPP_COPILOT_REGISTER_URL,
     ONEAPP_COPILOT_REGISTER_KEY,
+    ONEAPP_COPILOT_REGISTER_INSECURE,
     ONEAPP_COPILOT_REGISTER_MODEL_NAME,
     ONEAPP_COPILOT_REGISTER_SITE_NAME,
     ONEAPP_COPILOT_LB_ENABLED,
@@ -99,6 +106,12 @@ opennebula_template:
       O|password|API Key (empty = auto-generate)||
     oneapp_copilot_tls_domain: >-
       O|text|Domain for Let's Encrypt (empty = self-signed)||
+    oneapp_copilot_tls_email: >-
+      O|text|Email for Let's Encrypt registration (optional)||
+    oneapp_copilot_tls_ca: >-
+      O|text|Internal CA PEM to verify LB/backends (optional)||
+    oneapp_copilot_register_insecure: >-
+      O|boolean|Allow auto-registration to an unverified self-signed LB||NO
     oneapp_copilot_lb_enabled: >-
       O|boolean|Enable Load Balancer mode (LiteLLM proxy)||NO
     oneapp_copilot_lb_backends: >-
