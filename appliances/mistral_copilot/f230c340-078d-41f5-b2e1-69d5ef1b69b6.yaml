@@ -1,18 +1,18 @@
-# EuroCopilot Marketplace Metadata
+# Mistral Copilot Marketplace Metadata
 #
 # After a successful build, update these PLACEHOLDER values:
 #   1. images[0].url          -- Replace PUBLISH_URL with actual hosting URL
-#   2. images[0].checksum.md5 -- From: md5sum build/export/eurocopilot-2.8.0.qcow2
-#   3. images[0].checksum.sha256 -- From: sha256sum build/export/eurocopilot-2.8.0.qcow2
-#   4. images[0].size         -- From: qemu-img info --output=json build/export/eurocopilot-2.8.0.qcow2 | jq '.["virtual-size"]'
+#   2. images[0].checksum.md5 -- From: md5sum build/export/mistral_copilot-2.8.0.qcow2
+#   3. images[0].checksum.sha256 -- From: sha256sum build/export/mistral_copilot-2.8.0.qcow2
+#   4. images[0].size         -- From: qemu-img info --output=json build/export/mistral_copilot-2.8.0.qcow2 | jq '.["virtual-size"]'
 #   5. Rename this file to a UUID for marketplace PR: cp marketplace.yaml $(uuidgen).yaml
 #
 ---
-name: EuroCopilot
-version: '1.0'
+name: Mistral Copilot
+version: '1.1'
 publisher: OpenNebula Systems
 description: |-
-  [EuroCopilot](https://github.com/pablodelarco/one-apps-eurocopilot) is an
+  Mistral Copilot is an
   AI coding assistant that serves an open-source LLM over an
   OpenAI-compatible HTTPS API. It runs
   [Mistral 7B Instruct](https://mistral.ai/news/announcing-mistral-7b) on CPU via
@@ -43,7 +43,7 @@ tags:
   - aider
   - ubuntu
 format: qcow2
-creation_time: 1780012800
+creation_time: 1781604539
 os-id: Ubuntu
 os-release: '24.04 LTS'
 os-arch: x86_64
@@ -111,10 +111,10 @@ opennebula_template:
       O|text|Model name for LB registration (empty = auto)||
     oneapp_copilot_register_site_name: >-
       O|text|Site name for LB backend ID (e.g. poland0)||
-logo: eurocopilot.png
+logo: mistral.png
 images:
-  - name: eurocopilot_os
-    url: 'https://d38nm155miqkyg.cloudfront.net/eurocopilot-2.8.0.qcow2'
+  - name: mistral_copilot_os
+    url: 'https://d38nm155miqkyg.cloudfront.net/mistral_copilot-2.8.0.qcow2'
     type: OS
     dev_prefix: vd
     driver: qcow2

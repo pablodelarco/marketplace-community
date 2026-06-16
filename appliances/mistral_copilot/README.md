@@ -1,4 +1,4 @@
-# EuroCopilot
+# Mistral Copilot
 
 Sovereign AI coding assistant. Runs [Mistral 7B Instruct](https://mistral.ai/news/announcing-mistral-7b) on CPU via [llama.cpp](https://github.com/ggerganov/llama.cpp). No GPU required.
 
@@ -16,7 +16,7 @@ Larger Mistral-family models — [Devstral Small 2](https://mistral.ai/news/devs
 
 **Standalone** (default): Single VM serving inference on port 8443 with TLS and API key auth.
 
-**Load Balancer**: Enable `ONEAPP_COPILOT_LB_ENABLED=YES` to run a [LiteLLM](https://litellm.ai) proxy that distributes requests across multiple EuroCopilot VMs with least-busy routing.
+**Load Balancer**: Enable `ONEAPP_COPILOT_LB_ENABLED=YES` to run a [LiteLLM](https://litellm.ai) proxy that distributes requests across multiple Mistral Copilot VMs with least-busy routing.
 
 **Auto-registration**: Standalone VMs can register themselves with a remote LB on boot via `ONEAPP_COPILOT_REGISTER_URL`.
 
