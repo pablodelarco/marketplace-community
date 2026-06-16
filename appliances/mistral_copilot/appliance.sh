@@ -230,6 +230,14 @@ write_report_file() {
     local _ui_password
     _ui_password=$(cat "${UI_PASSWORD_FILE}" 2>/dev/null || echo "${_password}")
 
+    # Credential clients use against :8443. In standalone mode that is the
+    # llama-server inference key; in LB mode :8443 is the LiteLLM proxy, which
+    # authenticates with its (distinct) master key, so advertise that instead.
+    local _client_key="${_password}"
+    if is_lb_mode; then
+        _client_key=$(cat "${LB_MASTER_KEY_FILE}" 2>/dev/null || echo "${_password}")
+    fi
+
     # Determine endpoint URL (domain if set, IP otherwise)
     local _endpoint="https://${_vm_ip}:${LLAMA_PORT}"
     if [ -n "${ONEAPP_COPILOT_TLS_DOMAIN:-}" ]; then
@@ -250,7 +258,7 @@ write_report_file() {
     cat > "${_report}" <<EOF
 [Connection info]
 endpoint    = ${_endpoint}
-api_key     = ${_password}
+api_key     = ${_client_key}
 model       = ${ACTIVE_MODEL_ID}
 
 [Web UI]
@@ -263,16 +271,16 @@ tls          = ${_tls_mode}
 
 [OpenAI-compatible API]
 Base URL  : ${_endpoint}/v1
-API Key   : ${_password}
+API Key   : ${_client_key}
 Model     : openai/${ACTIVE_MODEL_ID}
 
 [OpenHands / other OpenAI clients]
 Model     : openai/${ACTIVE_MODEL_ID}
 Base URL  : ${_endpoint}/v1
-API Key   : ${_password}
+API Key   : ${_client_key}
 
 [Test with curl]
-curl ${_curl_tls} -H "Authorization: Bearer ${_password}" ${_endpoint}/v1/chat/completions \\
+curl ${_curl_tls} -H "Authorization: Bearer ${_client_key}" ${_endpoint}/v1/chat/completions \\
   -H 'Content-Type: application/json' \\
   -d '{"model":"${ACTIVE_MODEL_ID}","messages":[{"role":"user","content":"Hello"}]}'
 EOF
@@ -843,6 +851,13 @@ _ui_password=$(cat /var/lib/mistral_copilot/ui_password 2>/dev/null || echo "${_
 _llama=$(systemctl is-active mistral_copilot 2>/dev/null || echo 'unknown')
 _model=$(cat /var/lib/mistral_copilot/model_id 2>/dev/null || echo 'unknown')
 _proxy=$(systemctl is-active mistral_copilot-proxy 2>/dev/null)
+# In LB mode :8443 is the LiteLLM proxy (authenticates with the master key);
+# in standalone mode it is llama-server (the inference key).
+if [ "${_proxy}" = "active" ]; then
+_client_key=$(cat /var/lib/mistral_copilot/lb_master_key 2>/dev/null || echo "${_password}")
+else
+_client_key="${_password}"
+fi
 printf '\n'
 printf '  Mistral Copilot -- Sovereign AI Coding Assistant\n'
 printf '  =============================================\n'
@@ -855,7 +870,7 @@ printf '  Status   : %s\n' "${_llama}"
 printf '\n'
 printf '  [OpenAI-compatible API]\n'
 printf '  Base URL : https://%s:8443/v1\n' "${_vm_ip}"
-printf '  API Key  : %s\n' "${_password}"
+printf '  API Key  : %s\n' "${_client_key}"
 printf '  Model    : openai/%s\n' "${_model}"
 printf '\n'
 if [ "${_proxy}" = "active" ]; then
