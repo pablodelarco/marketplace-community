@@ -658,11 +658,16 @@ service_install() {
     log_copilot info "=== service_install started ==="
     log_copilot info "Installing Mistral Copilot appliance components (llama-server)"
 
-    # 1. Install build + runtime dependencies
+    # 1. Install build + runtime dependencies.
+    # NOTE: do not add iptables-persistent here. ufw declares
+    # "Breaks: iptables-persistent", so installing both in one transaction makes
+    # apt fail with "held broken packages" (exit 100). Rules are not persisted to
+    # disk: harden_firewall re-applies them on every boot
+    # (ONE_SERVICE_RECONFIGURABLE=true), so ufw + iptables is sufficient.
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
     apt-get install -y -qq build-essential cmake curl jq certbot libcurl4-openssl-dev libssl-dev \
-        ufw iptables-persistent >/dev/null
+        ufw iptables >/dev/null
 
     # 2. Clone and compile llama.cpp
     log_copilot info "Cloning llama.cpp at tag ${LLAMA_SERVER_VERSION}"
@@ -938,9 +943,8 @@ harden_firewall() {
             || ip6tables -A OUTPUT -p tcp -m multiport --dports 25,26,465,587,2525 -j REJECT 2>/dev/null || true
     fi
 
-    if command -v netfilter-persistent >/dev/null 2>&1; then
-        netfilter-persistent save >/dev/null 2>&1 || true
-    fi
+    # No netfilter-persistent save: rules are re-applied on every boot, and the
+    # package conflicts with ufw (see service_install), so it is not installed.
 
     log_copilot info "Firewall hardened (inbound 22/80/8443 only, SMTP egress blocked)"
 }
