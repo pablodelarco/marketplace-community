@@ -5,13 +5,9 @@ one-apps_version: 7.0.0-0
 publisher: Pablo
 publisher_email: pdelarco@opennebula.io
 description: |-
-  This appliance provides Nextcloud All-in-One
-  running in a Docker container on Ubuntu 24.04 (aarch64/arm64) with VNC access
-  and SSH key authentication.
+  This appliance provides Nextcloud All-in-One running in a Docker container on Ubuntu 24.04 (aarch64/arm64) with VNC access and SSH key authentication.
 
-  This is the aarch64/arm64 sibling of the x86_64 "Nextcloud All-in-One"
-  appliance. The Nextcloud AIO container images are multi-arch and run natively
-  on arm64, so no container is disabled for architecture reasons.
+  This is the aarch64/arm64 sibling of the x86_64 "Nextcloud All-in-One" appliance. The Nextcloud AIO container images are multi-arch and run natively on arm64, so no container is disabled for architecture reasons.
 
   **Nextcloud All-in-One features:**
   - Containerized application
