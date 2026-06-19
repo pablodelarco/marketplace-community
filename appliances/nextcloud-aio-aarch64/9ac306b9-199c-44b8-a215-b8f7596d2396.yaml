@@ -2,7 +2,7 @@
 name: Nextcloud All-in-One (aarch64)
 version: 1.0.0-1
 one-apps_version: 7.0.0-0
-publisher: Pablo
+publisher: Pablo del Arco
 publisher_email: pdelarco@opennebula.io
 description: |-
   This appliance provides Nextcloud All-in-One running in a Docker container on Ubuntu 24.04 (aarch64/arm64) with VNC access and SSH key authentication.
