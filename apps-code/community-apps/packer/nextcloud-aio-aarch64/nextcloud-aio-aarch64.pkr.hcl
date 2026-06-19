@@ -117,6 +117,23 @@ build {
     inline         = ["/etc/one-appliance/service install && sync"]
   }
 
+  # Clean build-time network artifacts. The build contextualizes with
+  # NETCFG_TYPE=nm (NetworkManager) so apt/docker have network, which persists a
+  # NetworkManager netplan connection (/etc/netplan/90-NM-*.yaml) into the image.
+  # At runtime one-context writes a networkd config (/etc/netplan/50-one-context.yaml);
+  # the two renderers then fight over eth0 and it never gets its IP. Remove the
+  # baked-in network config so the first runtime boot configures eth0 cleanly.
+  # Do NOT run `netplan apply` here: that would drop the build SSH connection;
+  # the clean state takes effect on the next (runtime) boot.
+  provisioner "shell" {
+    inline_shebang = "/bin/bash"
+    inline = [
+      "rm -f /etc/netplan/90-NM-*.yaml /etc/netplan/50-one-context.yaml",
+      "rm -f /etc/NetworkManager/system-connections/* 2>/dev/null || true",
+      "sync",
+    ]
+  }
+
   post-processor "shell-local" {
     execute_command = ["bash", "-c", "{{.Vars}} {{.Script}}"]
     environment_vars = [
