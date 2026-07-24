@@ -100,6 +100,12 @@ parse_config_file() {
     local line key value
 
     while IFS= read -r line || [ -n "$line" ]; do
+        # REG-1: tolerate Windows/CRLF specs by stripping a trailing CR, so a
+        # legitimate single-line value is not rejected as "contains a newline".
+        line="${line%$'\r'}"
+        # REG-4: strip leading whitespace so an indented KEY=VALUE line (which
+        # `source` accepted) is still parsed instead of silently skipped.
+        line="${line#"${line%%[![:space:]]*}"}"
         # Ignore blank lines and comments
         case "$line" in
             ''|\#*) continue ;;
@@ -113,11 +119,26 @@ parse_config_file() {
         key="${line%%=*}"
         value="${line#*=}"
 
+        # REG-1: trim trailing horizontal whitespace (e.g. a stray space after
+        # a closing quote in a hand-edited spec) before the quote logic, so
+        # `KEY="v" ` is treated like `KEY="v"`.
+        value="${value%"${value##*[![:space:]]}"}"
+
         # Strip ONE layer of surrounding matching quotes, literally (no eval).
+        # The whole-value branches run first so a value with an inner quote
+        # (e.g. "He said "hi"") is not mis-truncated. The remaining branches
+        # drop a trailing inline "# comment" from quoted or unquoted values
+        # (REG-3), matching what `source` would have discarded.
         if [[ "$value" == \"*\" && ${#value} -ge 2 ]]; then
             value="${value:1:${#value}-2}"
         elif [[ "$value" == \'*\' && ${#value} -ge 2 ]]; then
             value="${value:1:${#value}-2}"
+        elif [[ "$value" =~ ^\"([^\"]*)\"[[:space:]]+#.*$ ]]; then
+            value="${BASH_REMATCH[1]}"
+        elif [[ "$value" =~ ^\'([^\']*)\'[[:space:]]+#.*$ ]]; then
+            value="${BASH_REMATCH[1]}"
+        elif [[ "$value" =~ ^(.*[^[:space:]])[[:space:]]+#.*$ ]]; then
+            value="${BASH_REMATCH[1]}"
         fi
 
         # Assign into the known-key allowlist. Unknown keys are ignored.
@@ -147,21 +168,47 @@ parse_config_file() {
 parse_config_file "$CONFIG_FILE"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Strict validator (INJ-3, INJ-4, INJ-6, SECR-7).
+# PER-SINK validation & escaping (INJ-3, INJ-4, INJ-6, SECR-7; REG-4, BYP-1/2).
 #
-# Reject any field that contains shell metacharacters or newlines before any
-# value is interpolated into emitted scripts/YAML/HCL. This single gate
-# neutralizes the injection sinks: attacker values can no longer break out of
-# heredocs, YAML scalars, or the emitted docker run.
-# Forbidden: ` $ ; & | ( ) < > newline, and any quote character.
+# The previous design used ONE global denylist for every field. An adversarial
+# review found that single gate was simultaneously:
+#   - too LAX for shell/YAML sinks (it omitted backslash -> BYP-1 newline
+#     injection via `echo -e`; it permitted YAML-structural `: { # ,` -> BYP-2), and
+#   - too AGGRESSIVE for human-readable prose (it rejected `& ( ) '` so valid
+#     values like "Redis (in-memory cache), fast & light" were refused -> REG-4).
+#
+# We now validate/escape BY SINK:
+#   1. SHELL/EXEC-context fields (DOCKER_IMAGE, DEFAULT_CONTAINER_NAME,
+#      DEFAULT_PORTS, DEFAULT_ENV_VARS, DEFAULT_VOLUMES): keep STRICT metachar
+#      rejection and ADD backslash to the forbidden set (closes BYP-1's escape
+#      vector). These reach `printf %q` shell assignments and `docker run`.
+#   2. HUMAN-READABLE fields (APP_NAME, PUBLISHER_NAME, PUBLISHER_EMAIL,
+#      APP_DESCRIPTION, APP_FEATURES, WEB_INTERFACE): do NOT apply the shell
+#      denylist. Forbid ONLY raw newline/CR and backslash (backslash still
+#      barred so `echo -e`/YAML cannot re-interpret it), then emit them SAFELY
+#      per sink (single-quoted YAML scalars / literal printf).
+# APPLIANCE_NAME keeps its own ^[a-z][a-z0-9-]*$ regex (below).
 # ─────────────────────────────────────────────────────────────────────────────
-reject_metachars() {
+
+# reject_newline_backslash: the MINIMUM gate applied to every field. Raw
+# newline/CR would break out of a single-line scalar; backslash would be
+# re-interpreted by `echo -e` (BYP-1) or by YAML double-quoted parsing.
+reject_newline_backslash() {
     local field_name="$1" field_value="$2"
-    # Reject embedded newlines / carriage returns explicitly.
     if [[ "$field_value" == *$'\n'* || "$field_value" == *$'\r'* ]]; then
         print_error "$field_name contains a newline character, which is not allowed"; exit 1
     fi
-    # Reject shell metacharacters and quotes.
+    if [[ "$field_value" == *'\'* ]]; then
+        print_error "$field_name contains a backslash character, which is not allowed"; exit 1
+    fi
+}
+
+# reject_metachars: STRICT gate for shell/exec-context fields only. Rejects
+# newline/CR, backslash, and the shell metacharacters ` $ ; & | ( ) < > and
+# both quotes. Applied to values that reach a shell assignment or `docker run`.
+reject_metachars() {
+    local field_name="$1" field_value="$2"
+    reject_newline_backslash "$field_name" "$field_value"
     if [[ "$field_value" == *'`'* || "$field_value" == *'$'* || \
           "$field_value" == *';'* || "$field_value" == *'&'* || \
           "$field_value" == *'|'* || "$field_value" == *'('* || \
@@ -172,19 +219,38 @@ reject_metachars() {
     fi
 }
 
-# Validate every attacker-influenced field that reaches an emitted artifact.
+# yaml_squote: emit a value as a SAFE single-quoted YAML scalar. Doubling '
+# per the YAML spec means structural chars (`:` `{` `#` `,` `[` `%` `*` `!`
+# etc.) can never break YAML structure (BYP-2). Callers place the result
+# verbatim in the scalar position, e.g. `name: <yaml_squote APP_NAME>`.
+yaml_squote() {
+    local v="$1"
+    printf "'%s'" "${v//\'/\'\'}"
+}
+
+# 1. SHELL/EXEC-context fields: STRICT metachar rejection (+ backslash).
 reject_metachars "DOCKER_IMAGE"           "${DOCKER_IMAGE:-}"
-reject_metachars "APPLIANCE_NAME"         "${APPLIANCE_NAME:-}"
-reject_metachars "APP_NAME"               "${APP_NAME:-}"
-reject_metachars "PUBLISHER_NAME"         "${PUBLISHER_NAME:-}"
-reject_metachars "PUBLISHER_EMAIL"        "${PUBLISHER_EMAIL:-}"
-reject_metachars "APP_DESCRIPTION"        "${APP_DESCRIPTION:-}"
-reject_metachars "APP_FEATURES"           "${APP_FEATURES:-}"
-reject_metachars "APP_PORT"               "${APP_PORT:-}"
 reject_metachars "DEFAULT_CONTAINER_NAME" "${DEFAULT_CONTAINER_NAME:-}"
 reject_metachars "DEFAULT_PORTS"          "${DEFAULT_PORTS:-}"
-reject_metachars "DEFAULT_ENV_VARS"       "${DEFAULT_ENV_VARS:-}"
 reject_metachars "DEFAULT_VOLUMES"        "${DEFAULT_VOLUMES:-}"
+
+# REG-2: DEFAULT_ENV_VARS is deliberately emitted EMPTY (SECR-3) and never
+# persisted to any file, so the strict shell gate would needlessly abort on a
+# legitimate documentation default (e.g. "FOO=bar&baz"). Apply only the minimal
+# newline/backslash gate; the value is discarded, not executed.
+reject_newline_backslash "DEFAULT_ENV_VARS" "${DEFAULT_ENV_VARS:-}"
+reject_metachars "APP_PORT"               "${APP_PORT:-}"
+reject_metachars "APPLIANCE_NAME"         "${APPLIANCE_NAME:-}"
+
+# 2. HUMAN-READABLE fields: only bar raw newline/CR and backslash; `& ( ) '`
+# etc. are allowed and rendered safely per sink (REG-4). WEB_INTERFACE is
+# constrained to true/false below but pass it through the minimal gate too.
+reject_newline_backslash "APP_NAME"        "${APP_NAME:-}"
+reject_newline_backslash "PUBLISHER_NAME"  "${PUBLISHER_NAME:-}"
+reject_newline_backslash "PUBLISHER_EMAIL" "${PUBLISHER_EMAIL:-}"
+reject_newline_backslash "APP_DESCRIPTION" "${APP_DESCRIPTION:-}"
+reject_newline_backslash "APP_FEATURES"    "${APP_FEATURES:-}"
+reject_newline_backslash "WEB_INTERFACE"   "${WEB_INTERFACE:-}"
 
 # Validate required variables
 REQUIRED_VARS=("DOCKER_IMAGE" "APPLIANCE_NAME" "APP_NAME" "PUBLISHER_NAME" "PUBLISHER_EMAIL")
@@ -267,16 +333,93 @@ fi
 # resolves to the mutable :latest) and reject an explicit ':latest' tag. Prefer
 # an immutable digest (name@sha256:...) or at least a fixed tag. This prevents
 # silently pulling a repointed/malicious image at every boot.
+#
+# DEF-2 fix: a registry with an explicit port (e.g. `registry:5000/nginx`)
+# contains a ':' but has NO image tag, yet the old `*:*` check treated it as
+# "tagged" and let it through -> Docker then resolves it to mutable :latest.
+# We first STRIP an optional registry prefix (the first '/'-separated segment
+# that contains '.' or ':', i.e. a hostname or host:port), then look for a
+# tag/digest ONLY in the remaining repository[:tag] part.
 if [[ "$DOCKER_IMAGE" == *"@sha256:"* ]]; then
     : # digest-pinned, best case
-elif [[ "$DOCKER_IMAGE" != *:* ]]; then
-    print_error "DOCKER_IMAGE '$DOCKER_IMAGE' has no tag or digest (resolves to mutable :latest)."
-    print_info "Pin it, e.g. image:1.2.3 or image@sha256:<digest>"
-    exit 1
-elif [[ "$DOCKER_IMAGE" == *:latest ]]; then
-    print_error "DOCKER_IMAGE '$DOCKER_IMAGE' uses the mutable ':latest' tag."
-    print_info "Pin a specific version, e.g. image:1.2.3 or image@sha256:<digest>"
-    exit 1
+else
+    _img_repo="$DOCKER_IMAGE"
+    _img_first="${DOCKER_IMAGE%%/*}"
+    # If the first segment looks like a registry host (has '.' or ':') and a
+    # '/' follows, drop it so the port colon is not mistaken for a tag colon.
+    if [[ "$DOCKER_IMAGE" == */* && ( "$_img_first" == *.* || "$_img_first" == *:* ) ]]; then
+        _img_repo="${DOCKER_IMAGE#*/}"
+    fi
+    if [[ "$_img_repo" != *:* ]]; then
+        print_error "DOCKER_IMAGE '$DOCKER_IMAGE' has no tag or digest (resolves to mutable :latest)."
+        print_info "Pin it, e.g. image:1.2.3 or image@sha256:<digest>"
+        exit 1
+    elif [[ "${_img_repo##*:}" == "latest" ]]; then
+        print_error "DOCKER_IMAGE '$DOCKER_IMAGE' uses the mutable ':latest' tag."
+        print_info "Pin a specific version, e.g. image:1.2.3 or image@sha256:<digest>"
+        exit 1
+    fi
+fi
+
+# DEF-3: apply the SAME normalized sensitive-path check used by the emitted
+# appliance.sh runtime guard (DEF-1/CMP-DEF-5) to DEFAULT_VOLUMES at GENERATION
+# time and hard-fail. A dangerous default (docker socket, /, /usr, /var/lib/docker,
+# ...) must never be baked into the committed appliance/metadata/README files.
+#
+# is_sensitive_host_path: canonicalize the host path first, then reject if the
+# canonical path EQUALS or is UNDER any sensitive root. We prefer `realpath -m`
+# (GNU coreutils on the Linux target resolves symlinks and `.`/`..`/`//`/trailing
+# slashes even for non-existent paths); a pure-bash lexical fallback
+# (`_canon_path`) collapses `.`/`..`/`//` so the check stays correct even where
+# realpath -m is unavailable/BSD. Exact-or-subpath matching (prefix + '/')
+# avoids a /etc vs /etcfoo false match. This same logic is emitted verbatim into
+# appliance.sh below.
+SENSITIVE_MOUNT_ROOTS=(
+    /var/run/docker.sock /run/docker.sock
+    / /root /proc /sys /dev /boot
+    /var/run /run /usr /bin /sbin /lib /lib64 /var/lib/docker
+)
+# REG-2: bare /etc is intentionally NOT a sensitive root, so config-dir mounts
+# like /etc/nginx/conf.d (the documented example) are allowed; only the docker
+# socket and whole system roots above are blocked.
+_canon_path() {
+    # Lexically normalize an absolute-ish path: collapse //, resolve . and ..,
+    # strip trailing slash. No filesystem access; a safe fallback for realpath.
+    local p="$1" out=() seg
+    [ "${p#/}" = "$p" ] && p="/$p"   # treat as absolute for mount-root checks
+    local IFS=/
+    for seg in $p; do
+        case "$seg" in
+            ''|.) : ;;
+            ..) [ "${#out[@]}" -gt 0 ] && unset 'out[${#out[@]}-1]' ;;
+            *) out+=("$seg") ;;
+        esac
+    done
+    if [ "${#out[@]}" -eq 0 ]; then printf '/'; else printf '/%s' "${out[@]}"; fi
+}
+is_sensitive_host_path() {
+    local host_path="$1" resolved root
+    resolved="$(realpath -m -- "$host_path" 2>/dev/null)" || resolved=""
+    [ -z "$resolved" ] && resolved="$(_canon_path "$host_path")"
+    for root in "${SENSITIVE_MOUNT_ROOTS[@]}"; do
+        if [ "$resolved" = "$root" ] || [[ "$resolved" == "$root"/* ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+if [ -n "${DEFAULT_VOLUMES:-}" ]; then
+    IFS=',' read -ra _DEF_VOL_ARRAY <<< "$DEFAULT_VOLUMES"
+    for _vol in "${_DEF_VOL_ARRAY[@]}"; do
+        [ -z "$_vol" ] && continue
+        _host_path="${_vol%%:*}"
+        if is_sensitive_host_path "$_host_path"; then
+            print_error "DEFAULT_VOLUMES maps sensitive host path '$_host_path' (resolves under a protected system location)."
+            print_info "Refusing to bake a dangerous default mount into the appliance. Use an app-data path (e.g. /opt/<app>, /srv/<app>, /data)."
+            exit 1
+        fi
+    done
 fi
 
 # Validate BASE_OS
@@ -329,6 +472,21 @@ APPLIANCE_UUID=$(uuidgen)
 CREATION_TIME=$(date +%s)
 CURRENT_DATE=$(date +%Y-%m-%d)
 
+# BYP-2: pre-compute SINGLE-QUOTED YAML scalars for every interpolated field
+# that lands in a bare (unquoted) YAML scalar position. Single-quoting with
+# `'`->`''` escaping guarantees YAML-structural chars (`:` `{` `#` `,` `[` `%`
+# `*` `!` ...) in human-readable fields cannot break the document structure,
+# while still allowing legitimate prose like "Redis (in-memory cache), fast &
+# light" (REG-4). Shell-context fields (container name/ports/volumes) already
+# reject quotes, but we quote them here too for uniform, parse-safe output.
+APP_NAME_Y="$(yaml_squote "$APP_NAME")"
+PUBLISHER_NAME_Y="$(yaml_squote "$PUBLISHER_NAME")"
+PUBLISHER_EMAIL_Y="$(yaml_squote "$PUBLISHER_EMAIL")"
+SHORT_DESC_Y="$(yaml_squote "$APP_NAME with VNC access and SSH key auth")"
+CONTAINER_NAME_Y="$(yaml_squote "$DEFAULT_CONTAINER_NAME")"
+CONTAINER_PORTS_Y="$(yaml_squote "$DEFAULT_PORTS")"
+CONTAINER_VOLUMES_Y="$(yaml_squote "$DEFAULT_VOLUMES")"
+
 print_success "Directory structure created"
 
 # Generate metadata.yaml
@@ -369,11 +527,25 @@ EOF
 
 # Generate UUID.yaml (main appliance metadata)
 print_info "📝 Generating ${APPLIANCE_UUID}.yaml..."
+# BYP-1: build the feature list with `printf '  - %s\n'` so each feature stays
+# LITERAL. The old code used `$(echo "$feature" | xargs)` (which strips leading
+# whitespace AND interprets one backslash layer) and then emitted the block via
+# `echo -e "$FEATURES_YAML"` (which re-interprets `\n` into real newlines). An
+# attacker feature value like `realfeat\nmalicious_toplevel: X` therefore landed
+# at column 0 and injected a new top-level YAML key. printf keeps backslashes
+# literal (and backslash is now rejected upstream anyway), and hard-codes the
+# `  - ` block-scalar indentation so no continuation line can reach column 0.
+# We trim only leading/trailing SPACES/TABS per feature (no escape interpretation).
 IFS=',' read -ra FEATURES_ARRAY <<< "$APP_FEATURES"
 FEATURES_YAML=""
 for feature in "${FEATURES_ARRAY[@]}"; do
-    FEATURES_YAML="$FEATURES_YAML  - $(echo "$feature" | xargs)\n"
+    feature="${feature#"${feature%%[![:space:]]*}"}"   # strip leading whitespace
+    feature="${feature%"${feature##*[![:space:]]}"}"   # strip trailing whitespace
+    FEATURES_YAML+="$(printf '  - %s\n' "$feature")"
+    FEATURES_YAML+=$'\n'
 done
+# Drop the trailing newline so the heredoc interpolation adds exactly one.
+FEATURES_YAML="${FEATURES_YAML%$'\n'}"
 
 if [ "$WEB_INTERFACE" = "true" ]; then
     WEB_ACCESS="  - Web: $APP_NAME interface at http://VM_IP:$APP_PORT"
@@ -388,18 +560,18 @@ OS_TAG=$(echo "$OS_ID" | tr '[:upper:]' '[:lower:]')
 
 cat > "$REPO_ROOT/appliances/$APPLIANCE_NAME/${APPLIANCE_UUID}.yaml" << EOF
 ---
-name: $APP_NAME
+name: $APP_NAME_Y
 version: 1.0.0-1
 one-apps_version: 7.0.0-0
-publisher: $PUBLISHER_NAME
-publisher_email: $PUBLISHER_EMAIL
+publisher: $PUBLISHER_NAME_Y
+publisher_email: $PUBLISHER_EMAIL_Y
 description: |-
   $APP_DESCRIPTION. This appliance provides $APP_NAME
   running in a Docker container on $OS_DISPLAY with VNC access and
   SSH key authentication.
 
   **$APP_NAME features:**
-$(echo -e "$FEATURES_YAML")
+$(printf '%s' "$FEATURES_YAML")
   **This appliance provides:**
   - $OS_DISPLAY base operating system
   - Docker Engine CE pre-installed and configured
@@ -412,7 +584,7 @@ $(echo -e "$FEATURES_YAML")
   - VNC: Direct access to desktop environment
   - SSH: Key-based authentication from OpenNebula$WEB_ACCESS
 
-short_description: $APP_NAME with VNC access and SSH key auth
+short_description: $SHORT_DESC_Y
 tags:
 - $APPLIANCE_NAME
 - docker
@@ -440,7 +612,7 @@ opennebula_template:
     listen: 0.0.0.0
     type: vnc
   memory: '2048'
-  name: $APP_NAME
+  name: $APP_NAME_Y
   user_inputs:
     - CONTAINER_NAME: 'M|text|Container name|$DEFAULT_CONTAINER_NAME|$DEFAULT_CONTAINER_NAME'
     - CONTAINER_PORTS: 'M|text|Container ports (format: host:container)|$DEFAULT_PORTS|$DEFAULT_PORTS'
@@ -462,7 +634,7 @@ $APP_DESCRIPTION. This appliance provides $APP_NAME running in a Docker containe
 ## Key Features
 
 **$APP_NAME capabilities:**
-$(echo -e "$FEATURES_YAML")
+$(printf '%s' "$FEATURES_YAML")
 **This appliance provides:**
 - $OS_DISPLAY base operating system
 - Docker Engine CE pre-installed and configured
@@ -908,21 +1080,60 @@ setup_app_container()
 
     # Parse volume mounts
     if [ -n "$container_volumes" ]; then
+        # DEF-1 / CMP-DEF-5 / REG-1: sensitive host paths that must never be
+        # bind-mounted into the root-running container (mounting any of these =
+        # host compromise). We CANONICALIZE the host path first (realpath -m,
+        # which collapses `.`/`..`/`//`/trailing slashes and resolves symlinks
+        # even for non-existent paths), then reject only when the resolved path
+        # EQUALS or is UNDER one of these roots. Exact-or-subpath matching means
+        # legitimate app-data mounts (/opt/*, /srv/*, /mnt/*, /home/*, /data/*,
+        # and config dirs like /etc/nginx were previously over-rejected by the
+        # old /etc/* glob -> REG-1) still work, while /usr, /var/lib/docker,
+        # /run/docker.sock, / etc. are blocked. We do NOT reject the entire
+        # /etc or /var subtree: only the specific dangerous roots below.
+        local -a sensitive_roots=(
+            /var/run/docker.sock /run/docker.sock
+            / /root /proc /sys /dev /boot
+            /var/run /run /usr /bin /sbin /lib /lib64 /var/lib/docker
+        )
         IFS=',' read -ra VOL_ARRAY <<< "$container_volumes"
         for vol in "${VOL_ARRAY[@]}"; do
             [ -z "$vol" ] && continue
             local host_path="${vol%%:*}"
 
-            # DEF-5: reject mounts of sensitive host locations (docker socket,
-            # root, system dirs, device nodes). Mounting these into the
-            # root-running container is equivalent to host compromise.
-            local resolved="$host_path"
-            case "$host_path" in
-                /var/run/docker.sock|/|/etc|/etc/*|/root|/root/*|/var/run|/var/run/*|/proc|/proc/*|/sys|/sys/*|/dev|/dev/*|/boot|/boot/*)
-                    msg error "Refusing to mount sensitive host path: $host_path"
-                    return 1
-                    ;;
-            esac
+            # Canonicalize; prefer realpath -m (resolves symlinks + . / .. / //),
+            # else fall back to a pure-bash lexical normalization so the check
+            # stays correct even if realpath is unavailable.
+            local resolved
+            resolved="$(realpath -m -- "$host_path" 2>/dev/null)" || resolved=""
+            if [ -z "$resolved" ]; then
+                local _p="$host_path" _seg
+                local -a _out=()
+                [ "${_p#/}" = "$_p" ] && _p="/$_p"
+                local _oldifs="$IFS"; IFS=/
+                for _seg in $_p; do
+                    case "$_seg" in
+                        ''|.) : ;;
+                        ..) [ "${#_out[@]}" -gt 0 ] && unset '_out[${#_out[@]}-1]' ;;
+                        *) _out+=("$_seg") ;;
+                    esac
+                done
+                IFS="$_oldifs"
+                if [ "${#_out[@]}" -eq 0 ]; then resolved="/"; else resolved="$(printf '/%s' "${_out[@]}")"; fi
+            fi
+
+            local root rejected=0
+            for root in "${sensitive_roots[@]}"; do
+                if [ "$resolved" = "$root" ] || [ "${resolved#"$root"/}" != "$resolved" ]; then
+                    rejected=1
+                    break
+                fi
+            done
+            if [ "$rejected" -eq 1 ]; then
+                msg error "Refusing to mount sensitive host path: $host_path (resolves to $resolved)"
+                return 1
+            fi
+
             # Reject device nodes / sockets that already exist on the host.
             if [ -b "$resolved" ] || [ -c "$resolved" ] || [ -S "$resolved" ]; then
                 msg error "Refusing to mount device node or socket: $host_path"
@@ -931,8 +1142,8 @@ setup_app_container()
 
             # Create the host directory only if it does not yet exist. DEF-5:
             # do NOT chown -R an existing host tree (removed).
-            if [ ! -e "$host_path" ]; then
-                mkdir -p "$host_path"
+            if [ ! -e "$resolved" ]; then
+                mkdir -p "$resolved"
             fi
             run_args+=( -v "$vol" )
         done
@@ -979,14 +1190,36 @@ print_info "📝 Generating Packer configuration files..."
 # DEF-6 / SECR-8: the Packer QEMU communicator needs to SSH into the VM during
 # the build only. Instead of a fixed, published password we generate a random
 # per-build password used solely by the build-time context ISO and the Packer
-# communicator. It is never written to committed/human-facing files (README,
-# metadata, welcome banner) and is not the deployed VM's credential: the
-# deployed VM relies on context-injected SSH keys (see 81-configure-ssh.sh,
-# which re-hardens sshd during the build).
+# communicator. It is not the deployed VM's credential: the deployed VM relies
+# on context-injected SSH keys (see 81-configure-ssh.sh, which re-hardens sshd
+# during the build).
+#
+# DEF-4 / CMP-SECR-8: this random password IS written in cleartext into the
+# local build files gen_context and <name>.pkr.hcl (Packer must read it to
+# connect). Those two files live under the git-tracked packer/<name>/ dir, so
+# we drop a .gitignore below to keep them (and the credential) OUT of version
+# control. It is NOT written to human-facing files (README, metadata, welcome
+# banner).
 BUILD_SSH_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24 || true)"
 if [ -z "$BUILD_SSH_PASSWORD" ]; then
     BUILD_SSH_PASSWORD="$(uuidgen | tr -d '-')"
 fi
+
+# DEF-4 / CMP-SECR-8: prevent the build password (in gen_context and the
+# .pkr.hcl) from being committed. Write a .gitignore in the generated packer
+# dir that excludes the two password-bearing files. The build still works
+# (Packer reads them from disk); an accidental `git add -A` cannot leak them.
+cat > "$REPO_ROOT/apps-code/community-apps/packer/$APPLIANCE_NAME/.gitignore" << GITIGNORE_EOF
+# DEF-4 / CMP-SECR-8 / DEF-1: these generated files (and the build-time
+# artifacts derived from gen_context) embed the random per-build SSH password
+# in cleartext. Keep them all out of version control.
+gen_context
+${APPLIANCE_NAME}.pkr.hcl
+context.sh
+context/
+*-context.iso
+*.iso
+GITIGNORE_EOF
 
 # Generate variables.pkr.hcl
 cat > "$REPO_ROOT/apps-code/community-apps/packer/$APPLIANCE_NAME/variables.pkr.hcl" << 'EOF'
@@ -1114,7 +1347,11 @@ build {
 
   provisioner "shell" {
     inline_shebang = "/bin/bash -e"
-    inline         = ["/etc/one-appliance/service install && sync"]
+    # DEF-1: lock the root account password as the final in-guest step so the
+    # shipped image is SSH-key / context only and the random build password
+    # cannot be used for console login. This is the last provisioner, so no
+    # later password-based communicator step depends on it.
+    inline         = ["/etc/one-appliance/service install", "passwd -l root", "sync"]
   }
 
   post-processor "shell-local" {
@@ -1216,7 +1453,7 @@ MAINEND
 cat<<CTXEOF
 ETH0_METHOD='dhcp'
 NETWORK='YES'
-SET_HOSTNAME='${APP_NAME}'
+SET_HOSTNAME='${APPLIANCE_NAME}'
 PASSWORD='${BUILD_SSH_PASSWORD}'
 ETH0_MAC='00:11:22:33:44:55'
 NETCFG_TYPE='${NETCFG_TYPE}'
@@ -1302,16 +1539,18 @@ EOF
 # secrets (DB passwords, API keys); they must be supplied at instantiation via
 # the CONTAINER_ENV context variable, not committed to this file. Emit an empty
 # CONTAINER_ENV default.
+# BYP-2: emit each context.yaml scalar single-quoted (`'`->`''`) so structural
+# chars in the interpolated values cannot corrupt or break the YAML document.
 CONTEXT_ENV_LINE="CONTAINER_ENV:"
 CONTEXT_VOLUMES_LINE="CONTAINER_VOLUMES:"
 if [ -n "$DEFAULT_VOLUMES" ]; then
-    CONTEXT_VOLUMES_LINE="CONTAINER_VOLUMES: $DEFAULT_VOLUMES"
+    CONTEXT_VOLUMES_LINE="CONTAINER_VOLUMES: $CONTAINER_VOLUMES_Y"
 fi
 
 cat > "$REPO_ROOT/appliances/$APPLIANCE_NAME/context.yaml" << EOF
 ---
-CONTAINER_NAME: $DEFAULT_CONTAINER_NAME
-CONTAINER_PORTS: $DEFAULT_PORTS
+CONTAINER_NAME: $CONTAINER_NAME_Y
+CONTAINER_PORTS: $CONTAINER_PORTS_Y
 $CONTEXT_ENV_LINE
 $CONTEXT_VOLUMES_LINE
 EOF

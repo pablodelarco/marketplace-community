@@ -123,8 +123,16 @@ center_text() {
     printf "%${padding}s%s\n" "" "$text"
 }
 
-# Trap to ensure cursor is shown on exit
-trap 'show_cursor; stty echo 2>/dev/null' EXIT INT TERM
+# REG-3: the temp spec path must be visible to the EXIT trap, which runs in the
+# shell's GLOBAL scope after generate_appliance() (and main) have returned. A
+# `local env_file` would be out of scope by then, so `rm -f "$env_file"` would
+# expand to `rm -f ""` and leak the (possibly secret-bearing) spec in $TMPDIR.
+# Declare it at script scope and have the single global trap clean it up.
+WIZARD_ENV_FILE=""
+
+# Trap to ensure cursor is shown on exit AND the temp spec is removed on the
+# normal (successful) exit path, not only on interrupt.
+trap 'rm -f "$WIZARD_ENV_FILE"; show_cursor; stty echo 2>/dev/null' EXIT INT TERM
 
 # Navigation result constants
 NAV_CONTINUE=0
@@ -356,9 +364,32 @@ prompt_yes_no() {
 
 validate_docker_image() {
     local image=$1
-    if [[ ! "$image" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*:[a-zA-Z0-9._-]+$ ]] && \
-       [[ ! "$image" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]]; then
+
+    # Basic character sanity for a Docker reference. Allow an optional
+    # registry host[:port]/ prefix (so `registry:5000/nginx:1.25` is valid),
+    # a repository path, an optional :tag, and an optional @sha256 digest.
+    # The charset (letters, digits, . _ - / :) matches what the generator's
+    # metachar gate permits; the pin policy below enforces the tag/digest rule.
+    if [[ ! "$image" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/:-]*(@sha256:[a-fA-F0-9]{64})?$ ]]; then
         return 1
+    fi
+
+    # REG-2: enforce the SAME pin policy as generate-docker-appliance.sh (DEF-2)
+    # so the wizard cannot accept an image the generator will later reject and
+    # crash on. Reject a bare name and ':latest'; require a fixed :tag or an
+    # @sha256 digest. We strip an optional registry prefix (first '/'-segment
+    # containing '.' or ':') so a registry PORT colon is not mistaken for a tag.
+    if [[ "$image" == *"@sha256:"* ]]; then
+        return 0  # digest-pinned, best case
+    fi
+    local repo="$image" first="${image%%/*}"
+    if [[ "$image" == */* && ( "$first" == *.* || "$first" == *:* ) ]]; then
+        repo="${image#*/}"
+    fi
+    if [[ "$repo" != *:* ]]; then
+        return 2  # no tag/digest -> resolves to mutable :latest
+    elif [[ "${repo##*:}" == "latest" ]]; then
+        return 3  # explicit mutable :latest
     fi
     return 0
 }
@@ -404,10 +435,12 @@ step_docker_image() {
     print_nav_hint
 
     echo -e "Enter the Docker image you want to use for your appliance.\n"
+    print_info "Pin a specific version (a fixed :tag or an @sha256 digest)."
+    print_info "':latest' and untagged names are rejected for reproducible builds."
     print_info "Examples:"
-    print_info "  • nginx:alpine"
-    print_info "  • nodered/node-red:latest"
-    print_info "  • nextcloud/all-in-one:latest"
+    print_info "  • nginx:1.25.3"
+    print_info "  • nodered/node-red:4.0.9"
+    print_info "  • nextcloud/all-in-one:20240813"
     print_info "  • postgres:16-alpine"
     echo ""
 
@@ -416,13 +449,26 @@ step_docker_image() {
         local result=$?
         [ $result -ne $NAV_CONTINUE ] && return $result
 
-        if validate_docker_image "$DOCKER_IMAGE"; then
-            print_success "Docker image: $DOCKER_IMAGE"
-            sleep 0.5
-            return $NAV_CONTINUE
-        else
-            print_error "Invalid Docker image format. Please use format: image:tag or registry/image:tag"
-        fi
+        # REG-2: surface the specific pin-policy failure so the user fixes it
+        # here instead of getting a raw generator [ERROR] after all 7 steps.
+        validate_docker_image "$DOCKER_IMAGE"
+        local vres=$?
+        case $vres in
+            0)
+                print_success "Docker image: $DOCKER_IMAGE"
+                sleep 0.5
+                return $NAV_CONTINUE
+                ;;
+            2)
+                print_error "Image '$DOCKER_IMAGE' has no tag/digest (resolves to mutable :latest). Pin it, e.g. image:1.2.3"
+                ;;
+            3)
+                print_error "Image '$DOCKER_IMAGE' uses the mutable ':latest' tag. Pin a specific version, e.g. image:1.2.3"
+                ;;
+            *)
+                print_error "Invalid Docker image format. Use image:tag, registry/image:tag, or image@sha256:<digest>"
+                ;;
+        esac
     done
 }
 
@@ -665,12 +711,12 @@ generate_appliance() {
     # SECR-4: write the temporary spec via mktemp (mode 600) OUTSIDE the git
     # tree, and remove it on exit. DEFAULT_ENV_VARS may hold secrets, so the
     # file must not be world-readable or left behind in a committed directory.
-    local env_file
-    env_file="$(mktemp "${TMPDIR:-/tmp}/oneapp-wizard.XXXXXX.env")"
+    # REG-3: store the path in the SCRIPT-scope WIZARD_ENV_FILE (not a `local`)
+    # so the global EXIT trap set above actually removes it on normal exit. The
+    # trap already restores the cursor/tty, so we do NOT re-arm it here.
+    WIZARD_ENV_FILE="$(mktemp "${TMPDIR:-/tmp}/oneapp-wizard.XXXXXX.env")"
+    local env_file="$WIZARD_ENV_FILE"
     chmod 600 "$env_file"
-    # Preserve the existing cursor/tty restore behaviour while also removing the
-    # temp spec file on exit.
-    trap 'rm -f "$env_file"; show_cursor; stty echo 2>/dev/null' EXIT INT TERM
 
     if [ -n "${DEFAULT_ENV_VARS}" ]; then
         print_warning "Environment variables may contain secrets; they are written only to a temporary file and are not committed."
@@ -697,7 +743,17 @@ WEB_INTERFACE="${WEB_INTERFACE}"
 ENVEOF
 
     if [ -f "${SCRIPT_DIR}/generate-docker-appliance.sh" ]; then
-        "${SCRIPT_DIR}/generate-docker-appliance.sh" "$env_file" --no-build
+        # REG-2: guard the generator call. The wizard runs under `set -e`, so an
+        # unguarded non-zero exit would abort mid-flow (skipping the success
+        # message and firing the EXIT trap) with only a raw generator [ERROR].
+        # Surface the failure gracefully and keep the collected spec available.
+        if ! "${SCRIPT_DIR}/generate-docker-appliance.sh" "$env_file" --no-build; then
+            echo ""
+            print_error "Appliance generation failed (see the [ERROR] above)."
+            print_info "Your inputs were not lost. Fix the reported issue (commonly an"
+            print_info "unpinned Docker image or a sensitive default volume) and re-run."
+            return $NAV_CONTINUE
+        fi
 
         echo ""
         echo -e "  ${GREEN}✓ Appliance created successfully!${NC}"
