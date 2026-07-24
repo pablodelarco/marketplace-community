@@ -5,6 +5,11 @@
 
 set -e
 
+# SECR-2: create all generated files owner-only by default. Secret-bearing
+# outputs (context.yaml/metadata.yaml/${UUID}.yaml/appliance.sh) must not be
+# world-readable. Explicit chmod calls below further tighten specific files.
+umask 077
+
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -47,12 +52,17 @@ EOF
 
 # Parse arguments
 NO_BUILD=false
+FORCE=false
 CONFIG_FILE=""
 
 for arg in "$@"; do
     case $arg in
         --no-build)
             NO_BUILD=true
+            ;;
+        --force)
+            # PATH-2: allow overwriting an existing appliance/packer tree
+            FORCE=true
             ;;
         -h|--help)
             show_usage
@@ -70,7 +80,111 @@ if [ -z "$CONFIG_FILE" ]; then show_usage; exit 1; fi
 if [ ! -f "$CONFIG_FILE" ]; then print_error "Config file '$CONFIG_FILE' not found!"; exit 1; fi
 
 print_info "🚀 Loading configuration from $CONFIG_FILE"
-source "$CONFIG_FILE"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INJ-1 / SECR-5: SAFE config parser (NO `source`).
+#
+# The config file is untrusted data (a shared/downloaded appliance spec). We
+# must NOT execute it. Instead we read it line by line and only accept literal
+# KEY=VALUE assignments for a fixed allowlist of known keys. No command
+# substitution, arithmetic, or any other shell construct in the file is ever
+# evaluated. Values have at most one layer of surrounding matching quotes
+# stripped literally (no eval).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Allowlist of configuration keys the generator understands. Any other key in
+# the file is ignored. Alias keys (PORTS/ENV_VARS/VOLUMES/CONTAINER_PORTS/...)
+# map onto the canonical DEFAULT_* variables used throughout the generator.
+parse_config_file() {
+    local file="$1"
+    local line key value
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Ignore blank lines and comments
+        case "$line" in
+            ''|\#*) continue ;;
+        esac
+        # Strip an optional leading "export "
+        line="${line#export }"
+        # Only accept lines that are a KEY=VALUE assignment with a valid key
+        if [[ ! "$line" =~ ^[A-Z_][A-Z0-9_]*= ]]; then
+            continue
+        fi
+        key="${line%%=*}"
+        value="${line#*=}"
+
+        # Strip ONE layer of surrounding matching quotes, literally (no eval).
+        if [[ "$value" == \"*\" && ${#value} -ge 2 ]]; then
+            value="${value:1:${#value}-2}"
+        elif [[ "$value" == \'*\' && ${#value} -ge 2 ]]; then
+            value="${value:1:${#value}-2}"
+        fi
+
+        # Assign into the known-key allowlist. Unknown keys are ignored.
+        case "$key" in
+            DOCKER_IMAGE)            DOCKER_IMAGE="$value" ;;
+            APPLIANCE_NAME)          APPLIANCE_NAME="$value" ;;
+            APP_NAME)                APP_NAME="$value" ;;
+            PUBLISHER_NAME)          PUBLISHER_NAME="$value" ;;
+            PUBLISHER_EMAIL)         PUBLISHER_EMAIL="$value" ;;
+            APP_DESCRIPTION)         APP_DESCRIPTION="$value" ;;
+            APP_FEATURES)            APP_FEATURES="$value" ;;
+            APP_PORT)                APP_PORT="$value" ;;
+            WEB_INTERFACE)           WEB_INTERFACE="$value" ;;
+            BASE_OS)                 BASE_OS="$value" ;;
+            DEFAULT_CONTAINER_NAME|CONTAINER_NAME) DEFAULT_CONTAINER_NAME="$value" ;;
+            DEFAULT_PORTS)           DEFAULT_PORTS="$value" ;;
+            CONTAINER_PORTS|PORTS)   DEFAULT_PORTS="$value" ;;
+            DEFAULT_ENV_VARS)        DEFAULT_ENV_VARS="$value" ;;
+            CONTAINER_ENV|ENV_VARS)  DEFAULT_ENV_VARS="$value" ;;
+            DEFAULT_VOLUMES)         DEFAULT_VOLUMES="$value" ;;
+            CONTAINER_VOLUMES|VOLUMES) DEFAULT_VOLUMES="$value" ;;
+            *)                       : ;;  # unknown key -> ignore
+        esac
+    done < "$file"
+}
+
+parse_config_file "$CONFIG_FILE"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Strict validator (INJ-3, INJ-4, INJ-6, SECR-7).
+#
+# Reject any field that contains shell metacharacters or newlines before any
+# value is interpolated into emitted scripts/YAML/HCL. This single gate
+# neutralizes the injection sinks: attacker values can no longer break out of
+# heredocs, YAML scalars, or the emitted docker run.
+# Forbidden: ` $ ; & | ( ) < > newline, and any quote character.
+# ─────────────────────────────────────────────────────────────────────────────
+reject_metachars() {
+    local field_name="$1" field_value="$2"
+    # Reject embedded newlines / carriage returns explicitly.
+    if [[ "$field_value" == *$'\n'* || "$field_value" == *$'\r'* ]]; then
+        print_error "$field_name contains a newline character, which is not allowed"; exit 1
+    fi
+    # Reject shell metacharacters and quotes.
+    if [[ "$field_value" == *'`'* || "$field_value" == *'$'* || \
+          "$field_value" == *';'* || "$field_value" == *'&'* || \
+          "$field_value" == *'|'* || "$field_value" == *'('* || \
+          "$field_value" == *')'* || "$field_value" == *'<'* || \
+          "$field_value" == *'>'* || "$field_value" == *'"'* || \
+          "$field_value" == *"'"* ]]; then
+        print_error "$field_name contains forbidden shell metacharacters (one of \` \$ ; & | ( ) < > or a quote)"; exit 1
+    fi
+}
+
+# Validate every attacker-influenced field that reaches an emitted artifact.
+reject_metachars "DOCKER_IMAGE"           "${DOCKER_IMAGE:-}"
+reject_metachars "APPLIANCE_NAME"         "${APPLIANCE_NAME:-}"
+reject_metachars "APP_NAME"               "${APP_NAME:-}"
+reject_metachars "PUBLISHER_NAME"         "${PUBLISHER_NAME:-}"
+reject_metachars "PUBLISHER_EMAIL"        "${PUBLISHER_EMAIL:-}"
+reject_metachars "APP_DESCRIPTION"        "${APP_DESCRIPTION:-}"
+reject_metachars "APP_FEATURES"           "${APP_FEATURES:-}"
+reject_metachars "APP_PORT"               "${APP_PORT:-}"
+reject_metachars "DEFAULT_CONTAINER_NAME" "${DEFAULT_CONTAINER_NAME:-}"
+reject_metachars "DEFAULT_PORTS"          "${DEFAULT_PORTS:-}"
+reject_metachars "DEFAULT_ENV_VARS"       "${DEFAULT_ENV_VARS:-}"
+reject_metachars "DEFAULT_VOLUMES"        "${DEFAULT_VOLUMES:-}"
 
 # Validate required variables
 REQUIRED_VARS=("DOCKER_IMAGE" "APPLIANCE_NAME" "APP_NAME" "PUBLISHER_NAME" "PUBLISHER_EMAIL")
@@ -149,6 +263,22 @@ if [[ ! "$APPLIANCE_NAME" =~ ^[a-z][a-z0-9-]*$ ]]; then
     print_error "APPLIANCE_NAME must be lowercase letters, numbers, and hyphens only (e.g., home-assistant, node-red)"; exit 1
 fi
 
+# DEF-2: require a pinned image reference. Reject a bare name (which Docker
+# resolves to the mutable :latest) and reject an explicit ':latest' tag. Prefer
+# an immutable digest (name@sha256:...) or at least a fixed tag. This prevents
+# silently pulling a repointed/malicious image at every boot.
+if [[ "$DOCKER_IMAGE" == *"@sha256:"* ]]; then
+    : # digest-pinned, best case
+elif [[ "$DOCKER_IMAGE" != *:* ]]; then
+    print_error "DOCKER_IMAGE '$DOCKER_IMAGE' has no tag or digest (resolves to mutable :latest)."
+    print_info "Pin it, e.g. image:1.2.3 or image@sha256:<digest>"
+    exit 1
+elif [[ "$DOCKER_IMAGE" == *:latest ]]; then
+    print_error "DOCKER_IMAGE '$DOCKER_IMAGE' uses the mutable ':latest' tag."
+    print_info "Pin a specific version, e.g. image:1.2.3 or image@sha256:<digest>"
+    exit 1
+fi
+
 # Validate BASE_OS
 VALID_OS=false
 for os in "${SUPPORTED_BASE_OS[@]}"; do
@@ -176,6 +306,19 @@ print_info "🎯 Generating complete appliance: $APPLIANCE_NAME ($APP_NAME)"
 # Determine repository root (go up two levels from docs/automatic-appliance-tutorial/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# PATH-2: refuse to silently clobber an existing appliance/packer tree. A
+# malicious spec could reuse a trusted appliance name (e.g. "nginx") to graft
+# its own image/volumes onto the trusted identity. Require an explicit --force.
+APPLIANCE_DIR="$REPO_ROOT/appliances/$APPLIANCE_NAME"
+PACKER_DIR="$REPO_ROOT/apps-code/community-apps/packer/$APPLIANCE_NAME"
+if [ "$FORCE" != "true" ]; then
+    if [ -e "$APPLIANCE_DIR" ] || [ -e "$PACKER_DIR" ]; then
+        print_error "Appliance '$APPLIANCE_NAME' already exists (appliances/ or packer/)."
+        print_info "Refusing to overwrite. Re-run with --force to replace it."
+        exit 1
+    fi
+fi
 
 # Create directories (absolute paths from repository root)
 print_info "📁 Creating directory structure..."
@@ -220,7 +363,7 @@ cat > "$REPO_ROOT/appliances/$APPLIANCE_NAME/metadata.yaml" << EOF
     user_inputs:
       CONTAINER_NAME: 'M|text|Container name|$DEFAULT_CONTAINER_NAME|$DEFAULT_CONTAINER_NAME'
       CONTAINER_PORTS: 'M|text|Container ports (format: host:container)|$DEFAULT_PORTS|$DEFAULT_PORTS'
-      CONTAINER_ENV: 'O|text|Environment variables (format: VAR1=value1,VAR2=value2)|$DEFAULT_ENV_VARS|'
+      CONTAINER_ENV: 'O|text|Environment variables (format: VAR1=value1,VAR2=value2) - may contain secrets, provide at instantiation|'
       CONTAINER_VOLUMES: 'O|text|Volume mounts (format: /host/path:/container/path)|$DEFAULT_VOLUMES|'
 EOF
 
@@ -301,7 +444,7 @@ opennebula_template:
   user_inputs:
     - CONTAINER_NAME: 'M|text|Container name|$DEFAULT_CONTAINER_NAME|$DEFAULT_CONTAINER_NAME'
     - CONTAINER_PORTS: 'M|text|Container ports (format: host:container)|$DEFAULT_PORTS|$DEFAULT_PORTS'
-    - CONTAINER_ENV: 'O|text|Environment variables (format: VAR1=value1,VAR2=value2)|$DEFAULT_ENV_VARS|'
+    - CONTAINER_ENV: 'O|text|Environment variables (format: VAR1=value1,VAR2=value2) - may contain secrets, provide at instantiation|'
     - CONTAINER_VOLUMES: 'O|text|Volume mounts (format: /host/path:/container/path)|$DEFAULT_VOLUMES|'
   inputs_order: CONTAINER_NAME,CONTAINER_PORTS,CONTAINER_ENV,CONTAINER_VOLUMES
 logo: logos/$APPLIANCE_NAME.png
@@ -334,11 +477,11 @@ $(echo -e "$FEATURES_YAML")
 2. **Configure container settings** during VM instantiation:
    - Container name: $DEFAULT_CONTAINER_NAME
    - Port mappings: $DEFAULT_PORTS
-   - Environment variables: $DEFAULT_ENV_VARS
+   - Environment variables: provide at instantiation via CONTAINER_ENV (may contain secrets; not stored in this repo)
    - Volume mounts: $DEFAULT_VOLUMES
 3. **Access the VM**:
    - VNC: Direct desktop access via OpenNebula Sunstone
-   - SSH: \`ssh root@VM_IP\` (password: opennebula)$WEB_ACCESS
+   - SSH: \`ssh root@VM_IP\` using the SSH key injected via OpenNebula context (no password login)$WEB_ACCESS
 
 ## Web Interface Access (SSH Port Forwarding)
 
@@ -360,9 +503,11 @@ ssh -L $APP_PORT:VM_IP:$APP_PORT user@opennebula-host
 Format: \`host_port:container_port,host_port2:container_port2\`
 Default: \`$DEFAULT_PORTS\`
 
-### Environment Variables  
+### Environment Variables
 Format: \`VAR1=value1,VAR2=value2\`
-Default: \`$DEFAULT_ENV_VARS\`
+Provide these at VM instantiation via the CONTAINER_ENV context variable.
+**Note:** environment variables may contain secrets (passwords, API keys); they are
+intentionally not stored in this appliance's files or baked into the image.
 
 ### Volume Mounts
 Format: \`/host/path:/container/path,/host/path2:/container/path2\`
@@ -409,41 +554,56 @@ print_success "README.md generated"
 
 # Generate appliance.sh installation script with simplified Phoenix RTOS/Node-RED structure
 print_info "📝 Generating appliance.sh installation script (simplified structure)..."
-cat > "$REPO_ROOT/appliances/$APPLIANCE_NAME/appliance.sh" << APPLIANCE_HEADER
-#!/usr/bin/env bash
 
-# $APP_NAME Appliance Installation Script
-# Auto-generated by OpenNebula Docker Appliance Generator
-# Docker Image: $DOCKER_IMAGE
+# INJ-4 / SECR-3: emit the appliance.sh header safely.
+#
+# The static structure is emitted with a QUOTED heredoc terminator
+# ('APPLIANCE_HEADER') so the generator never expands attacker-controlled
+# values into the emitted source. The (already validated) config values are
+# injected as separate assignments produced with `printf '%q'`, which yields a
+# shell-safe literal that cannot break out of the assignment or inject code.
+#
+# SECR-3: DEFAULT_ENV_VARS is intentionally left EMPTY in the emitted script.
+# Secrets must be supplied at instantiation via ONEAPP_CONTAINER_ENV context,
+# never baked into the qcow2 image.
+APPLIANCE_SH="$REPO_ROOT/appliances/$APPLIANCE_NAME/appliance.sh"
 
-set -o errexit -o pipefail
-
-# List of contextualization parameters
-ONE_SERVICE_PARAMS=(
-    'ONEAPP_CONTAINER_NAME'     'configure'  'Docker container name'                    'O|text'
-    'ONEAPP_CONTAINER_PORTS'    'configure'  'Docker container port mappings'           'O|text'
-    'ONEAPP_CONTAINER_ENV'      'configure'  'Docker container environment variables'   'O|text'
-    'ONEAPP_CONTAINER_VOLUMES'  'configure'  'Docker container volume mappings'         'O|text'
-)
-
-# Configuration from user input
-DOCKER_IMAGE="$DOCKER_IMAGE"
-DEFAULT_CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
-DEFAULT_PORTS="$DEFAULT_PORTS"
-DEFAULT_ENV_VARS="$DEFAULT_ENV_VARS"
-DEFAULT_VOLUMES="$DEFAULT_VOLUMES"
-APP_NAME="$APP_NAME"
-APPLIANCE_NAME="$APPLIANCE_NAME"
-
-### Appliance metadata ###############################################
-
-ONE_SERVICE_NAME='$APP_NAME'
-ONE_SERVICE_VERSION=   #latest
-ONE_SERVICE_BUILD=\$(date +%s)
-ONE_SERVICE_SHORT_DESCRIPTION='$APP_NAME Docker Container Appliance'
-ONE_SERVICE_DESCRIPTION='$APP_NAME running in Docker container'
-ONE_SERVICE_RECONFIGURABLE=true
-APPLIANCE_HEADER
+{
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf '\n'
+    printf '# %s Appliance Installation Script\n' "$APP_NAME"
+    printf '# Auto-generated by OpenNebula Docker Appliance Generator\n'
+    printf '# Docker Image: %s\n' "$DOCKER_IMAGE"
+    printf '\n'
+    printf 'set -o errexit -o pipefail\n'
+    printf '\n'
+    printf '# List of contextualization parameters\n'
+    printf 'ONE_SERVICE_PARAMS=(\n'
+    printf "    'ONEAPP_CONTAINER_NAME'     'configure'  'Docker container name'                    'O|text'\n"
+    printf "    'ONEAPP_CONTAINER_PORTS'    'configure'  'Docker container port mappings'           'O|text'\n"
+    printf "    'ONEAPP_CONTAINER_ENV'      'configure'  'Docker container environment variables'   'O|text'\n"
+    printf "    'ONEAPP_CONTAINER_VOLUMES'  'configure'  'Docker container volume mappings'         'O|text'\n"
+    printf ')\n'
+    printf '\n'
+    printf '# Configuration from user input (values injected with printf %%q escaping)\n'
+    printf 'DOCKER_IMAGE=%q\n'           "$DOCKER_IMAGE"
+    printf 'DEFAULT_CONTAINER_NAME=%q\n' "$DEFAULT_CONTAINER_NAME"
+    printf 'DEFAULT_PORTS=%q\n'          "$DEFAULT_PORTS"
+    # SECR-3: never bake ENV secrets into the image; require them at runtime.
+    printf 'DEFAULT_ENV_VARS=%q\n'       ""
+    printf 'DEFAULT_VOLUMES=%q\n'        "$DEFAULT_VOLUMES"
+    printf 'APP_NAME=%q\n'               "$APP_NAME"
+    printf 'APPLIANCE_NAME=%q\n'         "$APPLIANCE_NAME"
+    printf '\n'
+    printf '### Appliance metadata ###############################################\n'
+    printf '\n'
+    printf 'ONE_SERVICE_NAME=%q\n'                  "$APP_NAME"
+    printf 'ONE_SERVICE_VERSION=   #latest\n'
+    printf 'ONE_SERVICE_BUILD=$(date +%%s)\n'
+    printf 'ONE_SERVICE_SHORT_DESCRIPTION=%q\n'     "$APP_NAME Docker Container Appliance"
+    printf 'ONE_SERVICE_DESCRIPTION=%q\n'           "$APP_NAME running in Docker container"
+    printf 'ONE_SERVICE_RECONFIGURABLE=true\n'
+} > "$APPLIANCE_SH"
 
 # Now append the rest with quoted heredoc to avoid escaping
 cat >> "$REPO_ROOT/appliances/$APPLIANCE_NAME/appliance.sh" << 'APPLIANCE_BODY'
@@ -625,7 +785,9 @@ ExecStart=-/sbin/agetty --noissue --autologin root %I 115200,38400,9600 vt102
 Type=idle
 SERIAL_EOF
 
-    echo 'root:opennebula' | chpasswd
+    # DEF-6 / SECR-8: do NOT set a fixed root password. Authentication relies
+    # solely on the SSH public key injected via OpenNebula context. Console
+    # auto-login (getty overrides above) still provides local access.
     systemctl enable getty@tty1.service serial-getty@ttyS0.service
 
     # Create welcome message
@@ -649,11 +811,9 @@ echo "    docker logs $DEFAULT_CONTAINER_NAME   - View container logs"
 echo "    docker exec -it $DEFAULT_CONTAINER_NAME /bin/bash - Access container"
 echo ""
 echo "  Access Methods:"
-echo "    SSH: Enabled (password: 'opennebula' + context SSH keys)"
+echo "    SSH: Enabled (context-injected SSH key only, no password login)"
 echo "    VNC Console: Enabled (via OpenNebula Sunstone)"
 echo "    Serial Console: Enabled (virsh console or Sunstone serial)"
-echo ""
-echo "  Default root password: opennebula"
 echo "=================================================="
 WELCOME_EOF
 
@@ -725,37 +885,56 @@ setup_app_container()
         docker rm "$container_name" 2>/dev/null || true
     fi
 
+    # INJ-3 / SECR-7: build docker arguments as a bash ARRAY and expand it
+    # quoted, so each port/env/volume value is passed as one un-split,
+    # un-globbed argument and cannot inject extra docker flags.
+    local -a run_args=()
+
     # Parse port mappings
-    local port_args=""
     if [ -n "$container_ports" ]; then
         IFS=',' read -ra PORT_ARRAY <<< "$container_ports"
         for port in "${PORT_ARRAY[@]}"; do
-            port_args="$port_args -p $port"
+            [ -n "$port" ] && run_args+=( -p "$port" )
         done
     fi
 
     # Parse environment variables
-    local env_args=""
     if [ -n "$container_env" ]; then
         IFS=',' read -ra ENV_ARRAY <<< "$container_env"
         for env in "${ENV_ARRAY[@]}"; do
-            env_args="$env_args -e $env"
+            [ -n "$env" ] && run_args+=( -e "$env" )
         done
     fi
 
     # Parse volume mounts
-    local volume_args=""
     if [ -n "$container_volumes" ]; then
         IFS=',' read -ra VOL_ARRAY <<< "$container_volumes"
         for vol in "${VOL_ARRAY[@]}"; do
-            local host_path=$(echo "$vol" | cut -d':' -f1)
-            # Only create directory if it doesn't exist and is not a socket/device file
+            [ -z "$vol" ] && continue
+            local host_path="${vol%%:*}"
+
+            # DEF-5: reject mounts of sensitive host locations (docker socket,
+            # root, system dirs, device nodes). Mounting these into the
+            # root-running container is equivalent to host compromise.
+            local resolved="$host_path"
+            case "$host_path" in
+                /var/run/docker.sock|/|/etc|/etc/*|/root|/root/*|/var/run|/var/run/*|/proc|/proc/*|/sys|/sys/*|/dev|/dev/*|/boot|/boot/*)
+                    msg error "Refusing to mount sensitive host path: $host_path"
+                    return 1
+                    ;;
+            esac
+            # Reject device nodes / sockets that already exist on the host.
+            if [ -b "$resolved" ] || [ -c "$resolved" ] || [ -S "$resolved" ]; then
+                msg error "Refusing to mount device node or socket: $host_path"
+                return 1
+            fi
+
+            # Create the host directory only if it does not yet exist. DEF-5:
+            # do NOT chown -R an existing host tree (removed).
             if [ ! -e "$host_path" ]; then
                 mkdir -p "$host_path"
-                # Set ownership to 1000:1000 (common for Docker containers)
-                chown -R 1000:1000 "$host_path" 2>/dev/null || true
             fi
-            volume_args="$volume_args -v $vol"
+            run_args+=( -v "$vol" )
         done
     fi
 
@@ -765,9 +944,21 @@ setup_app_container()
     msg info "  Environment: ${container_env:-none}"
     msg info "  Volumes: $container_volumes"
 
-    docker run -d --name "$container_name" --restart unless-stopped $port_args $env_args $volume_args "$DOCKER_IMAGE"
+    # DEF-1: apply conservative container hardening defaults. These reduce the
+    # blast radius of a container compromise without breaking typical images:
+    #   - no-new-privileges: block setuid privilege escalation inside container
+    #   - cap-drop=ALL + minimal add-backs: least-privilege capabilities
+    #   - pids-limit / memory: basic resource bounds against fork/DoS
+    local -a hardening_args=(
+        --security-opt=no-new-privileges
+        --cap-drop=ALL
+        --cap-add=CHOWN --cap-add=SETUID --cap-add=SETGID --cap-add=NET_BIND_SERVICE
+        --pids-limit=512
+        --memory=1g
+    )
 
-    if [ $? -eq 0 ]; then
+    if docker run -d --name "$container_name" --restart unless-stopped \
+        "${hardening_args[@]}" "${run_args[@]}" "$DOCKER_IMAGE"; then
         msg info "$APP_NAME container started successfully"
         docker ps --filter name="$container_name"
         return 0
@@ -778,11 +969,24 @@ setup_app_container()
 }
 APPLIANCE_BODY
 
-chmod +x "$REPO_ROOT/appliances/$APPLIANCE_NAME/appliance.sh"
+# SECR-2: appliance.sh only needs to be owner-executable, not world-readable.
+chmod 700 "$REPO_ROOT/appliances/$APPLIANCE_NAME/appliance.sh"
 print_success "appliance.sh generated (simplified Phoenix RTOS/Node-RED structure)"
 
 # Generate basic Packer files
 print_info "📝 Generating Packer configuration files..."
+
+# DEF-6 / SECR-8: the Packer QEMU communicator needs to SSH into the VM during
+# the build only. Instead of a fixed, published password we generate a random
+# per-build password used solely by the build-time context ISO and the Packer
+# communicator. It is never written to committed/human-facing files (README,
+# metadata, welcome banner) and is not the deployed VM's credential: the
+# deployed VM relies on context-injected SSH keys (see 81-configure-ssh.sh,
+# which re-hardens sshd during the build).
+BUILD_SSH_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24 || true)"
+if [ -z "$BUILD_SSH_PASSWORD" ]; then
+    BUILD_SSH_PASSWORD="$(uuidgen | tr -d '-')"
+fi
 
 # Generate variables.pkr.hcl
 cat > "$REPO_ROOT/apps-code/community-apps/packer/$APPLIANCE_NAME/variables.pkr.hcl" << 'EOF'
@@ -859,7 +1063,7 @@ source "qemu" "$APPLIANCE_NAME" {
   ]
 
   ssh_username     = "root"
-  ssh_password     = "opennebula"
+  ssh_password     = "${BUILD_SSH_PASSWORD}"
   ssh_timeout     = "900s"
   shutdown_command = "poweroff"
   vm_name          = var.appliance_name
@@ -977,6 +1181,13 @@ EOF
 
 # Generate gen_context with correct NETCFG_TYPE for the base OS
 NETCFG_TYPE="${OS_NETCFG_TYPES[$BASE_OS]:-netplan}"
+# DEF-6 / SECR-8: this gen_context produces the BUILD-TIME context ISO only.
+# It temporarily enables password SSH with a random per-build password so the
+# Packer communicator can connect; the 81-configure-ssh.sh provisioner then
+# re-hardens sshd (PasswordAuthentication no / PermitRootLogin without-password)
+# before the image is finalized. The deployed VM therefore ends up key-only.
+# We do NOT set a fixed/published PASSWORD and do not leave root password login
+# enabled in the shipped image.
 cat > "$REPO_ROOT/apps-code/community-apps/packer/$APPLIANCE_NAME/gen_context" << EOF
 #!/bin/bash
 set -eux -o pipefail
@@ -1006,13 +1217,13 @@ cat<<CTXEOF
 ETH0_METHOD='dhcp'
 NETWORK='YES'
 SET_HOSTNAME='${APP_NAME}'
-PASSWORD='opennebula'
+PASSWORD='${BUILD_SSH_PASSWORD}'
 ETH0_MAC='00:11:22:33:44:55'
 NETCFG_TYPE='${NETCFG_TYPE}'
 START_SCRIPT_BASE64="\$(echo "\$SCRIPT" | base64 -w0)"
 CTXEOF
 EOF
-chmod +x "$REPO_ROOT/apps-code/community-apps/packer/$APPLIANCE_NAME/gen_context"
+chmod 700 "$REPO_ROOT/apps-code/community-apps/packer/$APPLIANCE_NAME/gen_context"
 
 # Generate postprocess.sh
 cat > "$REPO_ROOT/apps-code/community-apps/packer/$APPLIANCE_NAME/postprocess.sh" << 'EOF'
@@ -1087,11 +1298,11 @@ end
 EOF
 
 # Generate context.yaml for testing
-# Handle empty values to avoid trailing spaces (yamllint error)
+# SECR-1: never persist DEFAULT_ENV_VARS here. Environment variables may carry
+# secrets (DB passwords, API keys); they must be supplied at instantiation via
+# the CONTAINER_ENV context variable, not committed to this file. Emit an empty
+# CONTAINER_ENV default.
 CONTEXT_ENV_LINE="CONTAINER_ENV:"
-if [ -n "$DEFAULT_ENV_VARS" ]; then
-    CONTEXT_ENV_LINE="CONTAINER_ENV: $DEFAULT_ENV_VARS"
-fi
 CONTEXT_VOLUMES_LINE="CONTAINER_VOLUMES:"
 if [ -n "$DEFAULT_VOLUMES" ]; then
     CONTEXT_VOLUMES_LINE="CONTAINER_VOLUMES: $DEFAULT_VOLUMES"
@@ -1105,6 +1316,12 @@ $CONTEXT_ENV_LINE
 $CONTEXT_VOLUMES_LINE
 EOF
 
+# SECR-2: explicitly tighten credential-bearing outputs to owner-only. umask
+# 077 already yields 600, but we set it explicitly as defense-in-depth.
+chmod 600 "$REPO_ROOT/appliances/$APPLIANCE_NAME/context.yaml" \
+          "$REPO_ROOT/appliances/$APPLIANCE_NAME/metadata.yaml" \
+          "$REPO_ROOT/appliances/$APPLIANCE_NAME/${APPLIANCE_UUID}.yaml" 2>/dev/null || true
+
 print_success "Additional files generated"
 
 print_success "Packer configuration files generated"
@@ -1114,8 +1331,12 @@ print_info "📝 Adding '$APPLIANCE_NAME' to Makefile.config SERVICES list..."
 MAKEFILE_CONFIG="$REPO_ROOT/apps-code/community-apps/Makefile.config"
 
 if [ -f "$MAKEFILE_CONFIG" ]; then
-    # Check if appliance is already in SERVICES list
-    if grep -q "SERVICES.*$APPLIANCE_NAME" "$MAKEFILE_CONFIG"; then
+    # PATH-3: anchor the membership test to the SERVICES := assignment and match
+    # the appliance name as a whole, space/assignment-delimited token, so a name
+    # that is a substring of an existing service (e.g. "red" in "node-red") is
+    # not falsely reported as already present. APPLIANCE_NAME is charset-limited
+    # to [a-z0-9-] (validated above), so it is a safe grep token here.
+    if grep -qE "^SERVICES :=.*( |:=)$APPLIANCE_NAME( |\$)" "$MAKEFILE_CONFIG"; then
         print_info "  ℹ️  '$APPLIANCE_NAME' already in SERVICES list"
     else
         # Add appliance to SERVICES list
