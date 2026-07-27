@@ -176,9 +176,9 @@ The generated `service_install()` installs `linux-image-generic` plus the
 matching `linux-modules-extra` and makes it the default GRUB entry. The minimal
 base images ship a `-kvm` kernel with no Virtual Terminal support, which makes
 the Sunstone VNC console come up as a black screen; the generic kernel fixes
-that. It also costs roughly a gigabyte in the exported qcow2 (a generated NGINX
-appliance measures ~1.4 GB, versus ~240 MB for the same appliance built without
-the kernel swap).
+that. It also roughly doubles the exported qcow2: a generated NGINX appliance
+measures ~1.4 GB, against ~0.6 GB for an equivalent appliance built without the
+kernel swap.
 
 If your appliance is headless and you do not care about the VNC console, delete
 that block from `appliances/<name>/appliance.sh` before building and the image
