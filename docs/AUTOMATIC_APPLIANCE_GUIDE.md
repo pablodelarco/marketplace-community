@@ -592,6 +592,52 @@ docker logs <container-name>
 - ✅ SSH access works with the context-injected key (`ssh root@<VM_IP>`); password login is correctly refused
 - ✅ Console auto-login works (check via VNC)
 
+### 3. Run the Certification Tests
+
+The generator writes an rspec test at
+`appliances/myapp/tests/00-myapp_basic.rb` and lists it in
+`appliances/myapp/tests.yaml`. The community harness
+(`lib/community/app_readiness.rb`) creates the image, instantiates a VM from
+your `metadata.yaml` `:params:` and runs the test against it. On the frontend:
+
+```bash
+# rspec is not part of the OpenNebula gem set; install it once
+sudo gem install --no-document rspec
+
+# the image must be readable by oneadmin (oned runs as oneadmin)
+sudo cp apps-code/community-apps/export/myapp.qcow2 /var/tmp/
+sudo chmod 644 /var/tmp/myapp.qcow2
+
+sudo -u oneadmin env IMAGES_URL=/var/tmp/ \
+  bash -c 'cd lib/community && mkdir -p results && ./app_readiness.rb myapp'
+```
+
+Expected output:
+
+```
+Appliance Certification
+  docker engine is active
+  MyApp image (myimage:1.2.3) is present
+  MyApp container (myapp-container) is running
+
+3 examples, 0 failures
+```
+
+Requirements that are easy to miss:
+
+- **Run as `oneadmin`.** The harness reaches the VM with `ssh root@<vm-ip>` and
+  the VM only trusts the key contextualization injected from
+  `$USER[SSH_PUBLIC_KEY]`, which is oneadmin's. Running as root gives
+  `Permission denied (publickey)` and every example fails with
+  `reached timeout ... reachable?`.
+- **`IMAGES_URL` must be readable by oneadmin.** A path under `/root` fails with
+  `Cannot parse image SIZE: ... (Permission denied)`.
+- **A VM template named `base` must exist** (`defaults.yaml` sets
+  `:template: base`); the harness instantiates it with `--disk <image>` plus the
+  context built from `metadata.yaml`.
+
+Results are written to `lib/community/results/myapp/`.
+
 ---
 
 ## 📤 Next Steps

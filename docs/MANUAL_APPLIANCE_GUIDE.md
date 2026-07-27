@@ -597,16 +597,39 @@ describe 'Appliance Certification' do
 end
 ```
 
-Run them from the frontend:
+Run them from the frontend, **as the `oneadmin` user**:
 
 ```bash
-cd lib/community
-./app_readiness.rb myapp
+# rspec is not part of the OpenNebula gem set; install it once
+sudo gem install --no-document rspec
+
+# the qcow2 must be readable by oneadmin (oned runs as oneadmin), so publish it
+# somewhere outside /root - :apps_path: in metadata.yaml points at /var/tmp
+sudo cp apps-code/community-apps/export/myapp.qcow2 /var/tmp/ && sudo chmod 644 /var/tmp/myapp.qcow2
+
+sudo -u oneadmin env IMAGES_URL=/var/tmp/ bash -c 'cd lib/community && mkdir -p results && ./app_readiness.rb myapp'
 ```
+
+Three things bite here if you get them wrong:
+
+- **Run as `oneadmin`, not root.** The harness reaches the VM with
+  `ssh root@<vm-ip>`, and the only key the VM trusts is the one contextualization
+  injected from `$USER[SSH_PUBLIC_KEY]` — oneadmin's. As root you get
+  `Permission denied (publickey)` and every example fails with
+  `reached timeout ... reachable?`.
+- **`IMAGES_URL` must point at a directory `oneadmin` can read.** The harness
+  creates the image from `${IMAGES_URL}myapp.qcow2`; a path under `/root` fails
+  with `Cannot parse image SIZE: ... (Permission denied)`.
+- **The harness needs a VM template named `base`.** `defaults.yaml` sets
+  `:template: base`, and `app_handler.rb` instantiates it with `--disk <image>`
+  and the context built from your `metadata.yaml` `:params:`. Create one with
+  the CPU/memory/NIC/graphics your appliance needs before running the tests.
 
 See `appliances/prowler/tests/00-prowler_basic.rb` for a full example. Do not
 use the minitest `class X < Test` style — `Test` is not defined in this harness
-and it fails with `NameError: uninitialized constant Test`.
+and it fails with `NameError: uninitialized constant Test`. Make each check
+retry: the VM answers SSH before the appliance has finished bootstrapping, so a
+single-shot `expect(...)` on `systemctl is-active docker` is racy.
 
 ---
 
@@ -653,6 +676,14 @@ ln -sf ../../../one-apps/packer/common.pkr.hcl packer/myapp/common.pkr.hcl
 ```
 
 ### variables.pkr.hcl
+
+`packer/build.sh` always passes `appliance_name`, `version`, `input_dir`,
+`output_dir` and `headless` on the command line, so these variables **must** be
+declared or the build stops with `Error: Undefined -var variable`.
+
+```bash
+nano packer/myapp/variables.pkr.hcl
+```
 
 ```hcl
 variable "appliance_name" {
@@ -762,6 +793,14 @@ chmod +x packer/myapp/82-configure-context.sh
 ```
 
 ### myapp.pkr.hcl
+
+This is the build definition `make myapp` runs. The file name must match the
+appliance name, because `packer/build.sh` loads every `*.pkr.hcl` in
+`packer/myapp/`.
+
+```bash
+nano packer/myapp/myapp.pkr.hcl
+```
 
 ```hcl
 source "null" "null" { communicator = "none" }
