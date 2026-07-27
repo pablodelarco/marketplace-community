@@ -49,11 +49,18 @@ Example config file (nginx.env):
     APP_PORT="80"
     WEB_INTERFACE="true"
     BASE_OS="ubuntu2204min"            # optional, this is the default
+    DISK_SIZE="20480"                  # optional, MiB, this is the default
 
 BASE_OS selects the base image the appliance is built on. It must already be
 built in apps-code/one-apps (e.g. 'cd apps-code/one-apps && make ubuntu2204min').
 Supported: ubuntu2204min ubuntu2204 ubuntu2404min ubuntu2404 debian12 debian11
            alma8 alma9 rocky8 rocky9 opensuse15
+
+DISK_SIZE is the appliance's virtual disk size in MiB. Packer can only GROW the
+base image, so this must be >= the base image's virtual size (ubuntu2204min is
+2.2 GiB, alma9 is 10 GiB). A smaller value aborts the build with
+"Error creating hard drive: qemu-img: Use the --shrink option ...". qcow2 is
+sparse, so a generous size does not enlarge the exported file.
 
 DEFAULT_VOLUMES: only declare a volume you actually populate. Mounting an empty
 host directory over a path the image ships content in (for example nginx's
@@ -177,6 +184,7 @@ parse_config_file() {
             APP_PORT)                APP_PORT="$value" ;;
             WEB_INTERFACE)           WEB_INTERFACE="$value" ;;
             BASE_OS)                 BASE_OS="$value" ;;
+            DISK_SIZE)               DISK_SIZE="$value" ;;
             DEFAULT_CONTAINER_NAME|CONTAINER_NAME) DEFAULT_CONTAINER_NAME="$value" ;;
             DEFAULT_PORTS)           DEFAULT_PORTS="$value" ;;
             CONTAINER_PORTS|PORTS)   DEFAULT_PORTS="$value" ;;
@@ -292,6 +300,16 @@ WEB_INTERFACE="${WEB_INTERFACE:-true}"
 APP_DESCRIPTION="${APP_DESCRIPTION:-Docker-based appliance for ${APP_NAME}}"
 APP_FEATURES="${APP_FEATURES:-Containerized application,Easy deployment,Configurable parameters}"
 BASE_OS="${BASE_OS:-ubuntu2204min}"
+
+# Virtual disk size (MiB) of the appliance image.
+#
+# Packer can only GROW the base image's disk. The supported base images differ
+# a lot here (ubuntu2204min is 2.2 GiB, alma9 is 10 GiB), and asking for less
+# than the base already has aborts the build with
+#   "Error creating hard drive: qemu-img: Use the --shrink option ..."
+# so the default must clear the largest base. qcow2 is sparse, so a generous
+# virtual size costs nothing in the exported file.
+DISK_SIZE="${DISK_SIZE:-20480}"
 
 # Define supported base OS images with their metadata
 declare -A OS_DISPLAY_NAMES=(
@@ -1363,7 +1381,7 @@ source "qemu" "$APPLIANCE_NAME" {
   net_device       = "virtio-net"
   format           = "qcow2"
   disk_compression = false
-  disk_size        = "8000"
+  disk_size        = "${DISK_SIZE}"
 
   output_directory = var.output_dir
 

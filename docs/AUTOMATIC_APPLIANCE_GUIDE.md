@@ -222,6 +222,7 @@ downloaded.
 | `APP_PORT` | No | Main application port | `80` |
 | `WEB_INTERFACE` | No | Has web UI? | `true` or `false` |
 | `BASE_OS` | No | Base OS image to build on (default `ubuntu2204min`) | `ubuntu2404min` |
+| `DISK_SIZE` | No | Appliance virtual disk size in MiB (default `20480`) | `20480` |
 
 **`BASE_OS`** is set inside the `.env` file, not on the command line. Supported
 values (anything else is rejected with exit 1):
@@ -231,6 +232,19 @@ values (anything else is rejected with exit 1):
 
 Whichever value you pick, `apps-code/one-apps/export/<BASE_OS>.qcow2` must be
 built before `make <name>` (see Step 2).
+
+**`DISK_SIZE`** is the appliance's virtual disk in MiB. Packer can only *grow*
+the base image, so it must be at least as large as the base you selected — the
+bases differ widely (`ubuntu2204min` is 2.2 GiB, `alma9` is 10 GiB). Asking for
+less aborts the build with:
+
+```
+Error creating hard drive: QemuImg error: qemu-img:
+Use the --shrink option to perform a shrink operation.
+```
+
+The default of `20480` clears every supported base. qcow2 is sparse, so a
+generous virtual size does not make the exported file bigger.
 
 **`DOCKER_IMAGE` must be pinned.** An untagged image or an explicit `:latest`
 tag is rejected — use a released tag (`nginx:1.27-alpine`) or a digest
