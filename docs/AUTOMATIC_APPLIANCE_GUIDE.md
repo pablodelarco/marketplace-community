@@ -499,6 +499,25 @@ in at generation time. Container environment variables may carry secrets (DB
 passwords, API keys), so always supply them here via `ONEAPP_CONTAINER_ENV`
 rather than committing them into the appliance files.
 
+**List separators.** `ONEAPP_CONTAINER_PORTS`, `ONEAPP_CONTAINER_ENV` and
+`ONEAPP_CONTAINER_VOLUMES` hold lists. The appliance accepts **either `,` or `;`**
+between items, so all of these are equivalent:
+
+```
+ONEAPP_CONTAINER_PORTS = "80:80,443:443"
+ONEAPP_CONTAINER_PORTS = "80:80;443:443"
+```
+
+Use whichever reads better in Sunstone. One place where it matters: the
+certification harness (`lib/community/app_handler.rb`) joins the
+`metadata.yaml` `:params:` entries with commas and hands the result to
+`onetemplate instantiate --context`, and the CLI splits that string on commas
+regardless of quoting. A comma *inside* a value is therefore truncated there
+(`"80:80,443:443"` arrives as `"80:80,"`). For that reason the generator writes
+the `:params:` defaults in `metadata.yaml` with `;`, and you should keep it that
+way. The same caution applies whenever you pass a list through
+`--context` on the command line — prefer `;` there.
+
 **Note:** The command will output a TEMPLATE_ID (e.g., `ID: 5`). Save this ID for the next step.
 
 #### Step 2.3: Instantiate the VM

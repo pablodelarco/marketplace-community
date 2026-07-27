@@ -518,6 +518,22 @@ CONTAINER_VOLUMES_Y="$(yaml_squote "$DEFAULT_VOLUMES")"
 
 print_success "Directory structure created"
 
+# Certification-safe copies of the list-valued defaults.
+#
+# lib/community/app_handler.rb builds the test context by joining every
+# metadata :params: entry with COMMAS and handing the result to
+# `onetemplate instantiate --context "..."`. The OpenNebula CLI splits that
+# string on commas regardless of quoting, so a value that itself contains a
+# comma is truncated there (e.g. '80:80,443:443' arrives as '80:80,' and the
+# 443 mapping silently disappears during certification).
+#
+# Emit these defaults separated by ';' instead. appliance.sh accepts BOTH ','
+# and ';' as list separators, so the documented comma form still works for
+# operators entering values in Sunstone.
+CERT_PORTS="${DEFAULT_PORTS//,/;}"
+CERT_ENV="${DEFAULT_ENV_VARS//,/;}"
+CERT_VOLUMES="${DEFAULT_VOLUMES//,/;}"
+
 # Generate metadata.yaml
 print_info "📝 Generating metadata.yaml..."
 cat > "$REPO_ROOT/appliances/$APPLIANCE_NAME/metadata.yaml" << EOF
@@ -530,12 +546,19 @@ cat > "$REPO_ROOT/appliances/$APPLIANCE_NAME/metadata.yaml" << EOF
     :base: $BASE_OS
   :hypervisor: KVM
   :context:
+    # ':prefixed: true' means the test harness ADDS the ONEAPP_ prefix itself
+    # (lib/community/app_handler.rb -> app_context()), so the parameter names
+    # below must be written WITHOUT it. Writing them pre-prefixed yields
+    # ONEAPP_ONEAPP_* and the appliance receives no configuration at all.
     :prefixed: true
+    # List values use ';' here on purpose: the harness joins these with commas
+    # before passing them to 'onetemplate instantiate --context', which splits
+    # on commas. appliance.sh accepts ',' and ';' interchangeably.
     :params:
-      :ONEAPP_CONTAINER_NAME: '$DEFAULT_CONTAINER_NAME'
-      :ONEAPP_CONTAINER_PORTS: '$DEFAULT_PORTS'
-      :ONEAPP_CONTAINER_ENV: '$DEFAULT_ENV_VARS'
-      :ONEAPP_CONTAINER_VOLUMES: '$DEFAULT_VOLUMES'
+      :CONTAINER_NAME: '$DEFAULT_CONTAINER_NAME'
+      :CONTAINER_PORTS: '$CERT_PORTS'
+      :CONTAINER_ENV: '$CERT_ENV'
+      :CONTAINER_VOLUMES: '$CERT_VOLUMES'
 
 :one:
   :template:
@@ -1108,7 +1131,7 @@ setup_app_container()
 
     # Parse port mappings
     if [ -n "$container_ports" ]; then
-        IFS=',' read -ra PORT_ARRAY <<< "$container_ports"
+        IFS=',;' read -ra PORT_ARRAY <<< "$container_ports"
         for port in "${PORT_ARRAY[@]}"; do
             [ -n "$port" ] && run_args+=( -p "$port" )
         done
@@ -1116,7 +1139,7 @@ setup_app_container()
 
     # Parse environment variables
     if [ -n "$container_env" ]; then
-        IFS=',' read -ra ENV_ARRAY <<< "$container_env"
+        IFS=',;' read -ra ENV_ARRAY <<< "$container_env"
         for env in "${ENV_ARRAY[@]}"; do
             [ -n "$env" ] && run_args+=( -e "$env" )
         done
@@ -1140,7 +1163,7 @@ setup_app_container()
             / /root /proc /sys /dev /boot
             /var/run /run /usr /bin /sbin /lib /lib64 /var/lib/docker
         )
-        IFS=',' read -ra VOL_ARRAY <<< "$container_volumes"
+        IFS=',;' read -ra VOL_ARRAY <<< "$container_volumes"
         for vol in "${VOL_ARRAY[@]}"; do
             [ -z "$vol" ] && continue
             local host_path="${vol%%:*}"
@@ -1578,28 +1601,32 @@ require_relative '../../../lib/community/app_handler'
 describe 'Appliance Certification' do
     include_context('vm_handler')
 
+    # The VM answers SSH before the appliance has finished its bootstrap, so
+    # every check retries until it succeeds instead of asserting once. Without
+    # this the suite is racy: 'systemctl is-active docker' in particular can be
+    # queried while docker is still starting.
+    def wait_for(description, cmd, timeout = 180)
+        start_time = Time.now
+        loop do
+            result = @info[:vm].ssh(cmd)
+            return result if result.success?
+            raise "#{description} not satisfied within #{timeout}s (last: #{cmd})" if Time.now - start_time > timeout
+            sleep 5
+        end
+    end
+
     it 'docker engine is active' do
-        result = @info[:vm].ssh('systemctl is-active docker')
-        expect(result.success?).to be(true)
+        wait_for('docker active', 'systemctl is-active docker')
     end
 
     it '$APP_NAME image ($DOCKER_IMAGE) is present' do
-        cmd = "docker images --format '{{.Repository}}:{{.Tag}}' | grep -F '$DOCKER_IMAGE'"
-        result = @info[:vm].ssh(cmd)
-        expect(result.success?).to be(true)
+        wait_for('image present',
+                 "docker images --format '{{.Repository}}:{{.Tag}}' | grep -F '$DOCKER_IMAGE'")
     end
 
     it '$APP_NAME container ($DEFAULT_CONTAINER_NAME) is running' do
-        cmd = "docker ps --format '{{.Names}}' | grep -Fx '$DEFAULT_CONTAINER_NAME'"
-        start_time = Time.now
-        timeout = 180
-
-        loop do
-            result = @info[:vm].ssh(cmd)
-            break if result.success?
-            raise "container $DEFAULT_CONTAINER_NAME not running within #{timeout}s" if Time.now - start_time > timeout
-            sleep 5
-        end
+        wait_for('container running',
+                 "docker ps --format '{{.Names}}' | grep -Fx '$DEFAULT_CONTAINER_NAME'")
     end
 end
 EOF
